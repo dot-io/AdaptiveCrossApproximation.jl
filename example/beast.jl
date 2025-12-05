@@ -17,10 +17,10 @@ struct AbstractKernel{K}
 end
 
 function AbstractKernel(
-    operator::BEAST.IntegralOperator, testspace::BEAST.Space, trialspace::BEAST.Space
+    operator::BEAST.IntegralOperator, testspace::BEAST.Space, trialspace::BEAST.Space; gpu=false
 )
     return AbstractKernel{scalartype(operator)}(
-        BEAST.blockassembler(operator, testspace, trialspace)
+        BEAST.blockassembler(operator, testspace, trialspace; gpu=gpu)
     )
 end
 
@@ -31,18 +31,18 @@ function (M::AbstractKernel{K})(
     return M.blockassembler(i, j, store)
 end
 
-K = AbstractKernel(op, sp1, sp2);
+K = AbstractKernel(op, sp1, sp2; gpu=true);
 
 AdaptiveCrossApproximation.nextrc!(buf, A::AbstractKernel, i, j) = A(buf, i, j)
 
 ##
 aca = ACA(
-    AdaptiveCrossApproximation.MaximumValue(zeros(Bool, length(sp1.pos))),
-    AdaptiveCrossApproximation.MaximumValue(zeros(Bool, length(sp2.pos))),
+    AdaptiveCrossApproximation.MaximumValue(),
+    AdaptiveCrossApproximation.MaximumValue(),
     AdaptiveCrossApproximation.FNormEstimator(0.0),
 )
 
 rowbuffer = zeros(Float64, 50, length(sp2.pos))
 colbuffer = zeros(Float64, length(sp1.pos), 50)
 
-@time npivots = aca(K, rowbuffer, colbuffer, 50, 1e-4);
+@time npivots = aca(K, rowbuffer, colbuffer, 50);
