@@ -1,12 +1,10 @@
-using AdaptiveCrossApproximation
 using BEAST
 using CompScienceMeshes
+using AdaptiveCrossApproximation
 using StaticArrays
 
-#Define helper Functions
-
-m1 = meshrectangle(1.0, 1.0, 0.1)
-m2 = translate(meshrectangle(1.0, 1.0, 0.1), SVector(2.0, 0.0, 0.0))
+m1 = meshrectangle(1.0, 1.0, 0.05)
+m2 = translate(meshrectangle(1.0, 1.0, 0.05), SVector(2.0, 0.0, 0.0))
 
 op = Helmholtz3D.singlelayer()
 sp1 = lagrangecxd0(m1)
@@ -17,10 +15,14 @@ struct AbstractKernel{K}
 end
 
 function AbstractKernel(
-    operator::BEAST.IntegralOperator, testspace::BEAST.Space, trialspace::BEAST.Space; gpu=false
+    operator::BEAST.IntegralOperator,
+    testspace::BEAST.Space,
+    trialspace::BEAST.Space;
+    quadstrat=DoubleNumQStrat(4, 4),
+    gpu=false,
 )
     return AbstractKernel{scalartype(operator)}(
-        BEAST.blockassembler(operator, testspace, trialspace)
+        BEAST.blockassembler(operator, testspace, trialspace; quadstrat=quadstrat, gpu=gpu)
     )
 end
 
@@ -31,12 +33,10 @@ function (M::AbstractKernel{K})(
     return M.blockassembler(i, j, store)
 end
 
-
-print("Testing CPU and GPU kernels for one matrix block...\n")
+print("Testing DoubleNumQStrat (DoubleQuadRule) assembly...\n")
 
 AdaptiveCrossApproximation.nextrc!(buf, A::AbstractKernel, i, j) = A(buf, i, j)
 
-##
 aca = ACA(
     AdaptiveCrossApproximation.MaximumValue(),
     AdaptiveCrossApproximation.MaximumValue(),
@@ -45,17 +45,17 @@ aca = ACA(
 
 function run_aca(label, K, sp1, sp2, aca)
     println(label)
-    rowbuffer = zeros(Float64, 50, length(sp2.pos))
-    colbuffer = zeros(Float64, length(sp1.pos), 50)
-    @time npivots = aca(K, rowbuffer, colbuffer, 50)
+    rowbuffer = zeros(Float64, 80, length(sp2.pos))
+    colbuffer = zeros(Float64, length(sp1.pos), 80)
+    @time npivots = aca(K, rowbuffer, colbuffer, 80)
     println("Pivots: ", npivots)
     return npivots, rowbuffer, colbuffer
 end
 
-K_cpu = AbstractKernel(op, sp1, sp2; gpu=false)
+K_cpu = AbstractKernel(op, sp1, sp2; quadstrat=DoubleNumQStrat(4, 4), gpu=false)
 cpu_npivots, cpu_rowbuffer, cpu_colbuffer = run_aca("CPU run", K_cpu, sp1, sp2, aca)
 
-K_gpu = AbstractKernel(op, sp1, sp2; gpu=true)
+K_gpu = AbstractKernel(op, sp1, sp2; quadstrat=DoubleNumQStrat(4, 4), gpu=true)
 gpu_npivots, gpu_rowbuffer, gpu_colbuffer = run_aca("GPU run", K_gpu, sp1, sp2, aca)
 
 row_max_diff = maximum(abs.(cpu_rowbuffer - gpu_rowbuffer))

@@ -6,6 +6,7 @@ authors = ["JoshuaTetzner <joshua.tetzner@uni-rostock.de>"]
 [deps]
 BEAST = "bb4162c7-ba94-5a20-af32-d8ec4428bdd1"
 CompScienceMeshes = "3e66a162-7b8c-5da0-b8f8-124ecd2c3ae1"
+Debugger = "31a5f54b-26ea-5ae9-a837-f05ce5417438"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Polynomials = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
@@ -21,6 +22,7 @@ ACAH2Trees = ["H2Trees"]
 
 [compat]
 CompScienceMeshes = "0.10.0"
+Debugger = "0.7.16"
 H2Trees = "0.1"
 Polynomials = "4.1.0"
 StaticArrays = "1.9.13"

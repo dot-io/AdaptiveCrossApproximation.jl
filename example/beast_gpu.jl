@@ -20,7 +20,7 @@ function AbstractKernel(
     operator::BEAST.IntegralOperator, testspace::BEAST.Space, trialspace::BEAST.Space; gpu=false
 )
     return AbstractKernel{scalartype(operator)}(
-        BEAST.blockassembler(operator, testspace, trialspace)
+        BEAST.blockassembler_gpu(operator, testspace, trialspace)
     )
 end
 
