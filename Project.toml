@@ -20,7 +20,6 @@ BEAST = {path = "/home/nathan/school/thesis/BEAST.jl"}
 ACAH2Trees = ["H2Trees"]
 
 [compat]
-CompScienceMeshes = "0.10.0"
 H2Trees = "0.1"
 Polynomials = "4.1.0"
 StaticArrays = "1.9.13"
