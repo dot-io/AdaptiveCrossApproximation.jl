@@ -2,6 +2,7 @@ module AdaptiveCrossApproximation
 
 using LinearAlgebra
 using StaticArrays
+using BEAST
 
 include("pivoting/abstractpivoting.jl")
 include("convergence/abstractconvergence.jl")
@@ -20,6 +21,7 @@ include("convergence/combinedconvcrit.jl")
 include("pivoting/combinedpivstrat.jl")
 include("pivoting/randomsampling.jl")
 
+include("abstractkernel.jl")
 include("aca.jl")
 include("acaT.jl")
 include("iaca.jl")

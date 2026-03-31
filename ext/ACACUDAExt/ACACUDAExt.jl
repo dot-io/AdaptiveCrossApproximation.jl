@@ -4,14 +4,18 @@ module ACACUDAExt
 using AdaptiveCrossApproximation:
     AdaptiveCrossApproximation,
     ACA,
+    AbstractKernel,
     PivStrat,
     ConvCrit,
     MaximumValue,
     FNormEstimator,
     tolerance
+using BEAST
 using CUDA
 using CUDA.CUBLAS
 using LinearAlgebra
+
+include("AbstractKernelGPU.jl")
 
 # --------------------------------------------------------------------------
 # Small CUDA helpers
@@ -89,7 +93,7 @@ function update_normUV2!(
     normF::Base.RefValue{T},
     rowbuffer::CuMatrix{T},
     colbuffer::CuMatrix{T},
-    npivots::Tuple[Int],
+    npivots::Vector{Int},
     maxrows::Int,
     maxcols::Int,
 ) where {T<:AbstractFloat}
@@ -104,10 +108,10 @@ function update_normUV2!(
     n_cols = length(npivots)
     @views u_new = rowbuffer[npivots, 1:maxcols]
     @views v_new = colbuffer[1:maxrows, npivots]
-    VV† = CUBLAS.herk('N', 'N', v_new)
-    U†U = CUBLAS.herk('T', 'T', u_new)
-    new_norm = CUBLAS.dotc(VV†, U†U) # Squared frobenius norm of the new matrix
-    VpV† = CUBLAS.herk
+    VVh = CUBLAS.herk('N', 'N', v_new)
+    UhU = CUBLAS.herk('T', 'T', u_new)
+    new_norm = CUBLAS.dotc(VVh, UhU) # Squared frobenius norm of the new matrix
+    # VpVh = CUBLAS.herk
     normF[] = accumulator
     return rnorm, cnorm
 end

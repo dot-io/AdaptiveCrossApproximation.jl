@@ -8,7 +8,6 @@ using LinearAlgebra
 using LinearMaps
 using OhMyThreads
 
-include("abstractbeastmatrix.jl")
 include("skeletons.jl")
 include("hmatrix.jl")
 

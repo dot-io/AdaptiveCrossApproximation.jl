@@ -1,3 +1,5 @@
+using BEAST: operator
+using CUDA
 using H2Trees
 using OhMyThreads
 using BlockSparseMatrices
@@ -82,6 +84,7 @@ function HMatrix(
     compressor=ACA(),
     maxrank=30,
     ntasks=Threads.nthreads(),
+    gpu=false,
 )
     lk = Threads.SpinLock()
     T = scalartype(operator)
@@ -106,7 +109,11 @@ function HMatrix(
     # storing the far interactions as vector of Dicts, each Dict corresponding to
     # one level, each Dict contains the nodes on the level.
     # Allows easy multithreading in MV
-    farmatrix = AbstractKernel(operator, testspace, trialspace; quadstrat=farquadstrat)
+    #
+    # _make_kernel is a helper function which decides at-runtime to use the CPU or GPU
+    farmatrix = AbstractKernel(
+        operator, testspace, trialspace; quadstrat=farquadstrat, gpu=gpu
+    )
     iterator = H2Trees.WellSeparatedIterator(; isnear=(tree) -> isnear)(tree)
     farinteractions = Vector{Vector{MatrixBlock{Int,T,LowRankMatrix{T}}}}[]
 
