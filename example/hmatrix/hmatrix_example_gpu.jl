@@ -33,6 +33,7 @@ hmat = HMatrix(
     nearquadstrat=DoubleNumSauterQstrat(4, 4, 6, 6, 6, 6),
     farquadstrat=DoubleNumSauterQstrat(2, 3, 1, 1, 1, 1),
     gpu=false,
+    compressor=ACA(),
 )
 
 hmat_gpu = HMatrix(
@@ -64,3 +65,8 @@ y_ref = A * x
 println("CPU hmat error:  ", norm(y_cpu - y_ref) / norm(y_ref))
 println("GPU hmat error:  ", norm(y_gpu - y_ref) / norm(y_ref))
 println("CPU vs GPU diff: ", norm(y_cpu - y_gpu) / norm(y_ref))
+
+println(first(hmat.nearinteractions), last(hmat.nearinteractions))
+println(first(hmat_gpu.nearinteractions), last(hmat_gpu.nearinteractions))
+println(first(hmat.farinteractions), last(hmat.farinteractions))
+println(first(hmat_gpu.farinteractions), last(hmat_gpu.farinteractions))
