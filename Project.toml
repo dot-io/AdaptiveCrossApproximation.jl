@@ -22,6 +22,10 @@ BEAST = {path = "/home/students/em/nathmest/BEAST.jl"}
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 CUBLAS = "be33ccc6-a3ff-5ff2-a52e-74243cff1e17"
 
+[weakdeps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+CUBLAS = "be33ccc6-a3ff-5ff2-a52e-74243cff1e17"
+
 [extensions]
 ACAH2Trees = ["H2Trees"]
 ACACUDAExt = ["CUDA"]
