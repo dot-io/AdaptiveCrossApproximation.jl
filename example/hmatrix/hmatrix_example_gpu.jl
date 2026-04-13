@@ -35,7 +35,6 @@ hmat = HMatrix(
     nearquadstrat=DoubleNumSauterQstrat(4, 4, 6, 6, 6, 6),
     farquadstrat=DoubleNumSauterQstrat(2, 3, 1, 1, 1, 1),
     gpu=false,
-    compressor=ACA(),
 )
 
 hmat_gpu = HMatrix(

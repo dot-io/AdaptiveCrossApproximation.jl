@@ -14,18 +14,17 @@ OhMyThreads = "67456a42-1dca-4109-a031-0a68de7e3ad5"
 ParallelKMeans = "42b8e9d4-006b-409a-8472-7f34b3fb58af"
 Polynomials = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
-Suppressor = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
-
-[weakdeps]
-CUBLAS = "be33ccc6-a3ff-5ff2-a52e-74243cff1e17"
-CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 
 [sources]
 BEAST = {path = "/home/students/em/nathmest/BEAST.jl"}
 
+[weakdeps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+CUBLAS = "be33ccc6-a3ff-5ff2-a52e-74243cff1e17"
+
 [extensions]
-ACACUDAExt = ["CUDA"]
 ACAH2Trees = ["H2Trees"]
+ACACUDAExt = ["CUDA"]
 
 [compat]
 BlockSparseMatrices = "0.3.1"
@@ -35,7 +34,6 @@ OhMyThreads = "0.8.5"
 ParallelKMeans = "1.1.0"
 Polynomials = "4.1.0"
 StaticArrays = "1.9.13"
-Suppressor = "0.2.8"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
