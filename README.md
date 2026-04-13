@@ -9,8 +9,13 @@
 [![Docs-stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://JoshuaTetzner.github.io/AdaptiveCrossApproximation.jl/stable/)
 [![Docs-dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://JoshuaTetzner.github.io/AdaptiveCrossApproximation.jl/dev/)
 [![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/JoshuaTetzner/AdaptiveCrossApproximation.jl/blob/master/LICENSE)
+<<<<<<< HEAD
 [![CI](https://github.com/JoshuaTetzner/AdaptiveCrossApproximation.jl/actions/workflows/CI.yml/badge.svg?branch=master)](https://github.com/JoshuaTetzner/AdaptiveCrossApproximation.jl/actions/workflows/CI.yml)
+=======
+[![CI](https://github.com/JoshuaTetzner/AdaptiveCrossApproximation.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/JoshuaTetzner/AdaptiveCrossApproximation.jl/actions/workflows/CI.yml)
+>>>>>>> 6df2ccc94815d0b4abcfe96ed4d9ce821f1f3693
 [![codecov](https://codecov.io/gh/JoshuaTetzner/AdaptiveCrossApproximation.jl/graph/badge.svg?token=RDRQTBWQS3)](https://codecov.io/gh/JoshuaTetzner/AdaptiveCrossApproximation.jl)
+[![DOI](https://zenodo.org/badge/998817070.svg)](https://doi.org/10.5281/zenodo.18161380)
 
 ## Introduction
 
