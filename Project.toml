@@ -21,7 +21,7 @@ CUBLAS = "be33ccc6-a3ff-5ff2-a52e-74243cff1e17"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 
 [sources]
-BEAST = {path = "/home/nathan/school/thesis/example_cedric/BEAST.jl/"}
+BEAST = {path = "/home/students/em/nathmest/BEAST.jl"}
 
 [extensions]
 ACACUDAExt = ["CUDA"]
@@ -46,6 +46,8 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TestItemRunner = "f8b46487-2199-4994-9208-9a1283c18c0a"
 TestItems = "1c621080-faea-4a02-84b6-bbd5e436b8fe"
+Debugger = "31a5f54b-26ea-5ae9-a837-f05ce5417438"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 
 [targets]
 test = ["Aqua", "JET", "JuliaFormatter", "Test", "TestItemRunner", "TestItems", "Random", "H2Trees"]
