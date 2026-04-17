@@ -1,7 +1,8 @@
 # GPU-compatible kernel type and constructor dispatch.
 # Inspired by Joshua Tetzner's `abstractbeastmatrix.jl` definitions.
 # BEASTCUDAExt = Base.get_extension(BEAST, :BEASTCUDAExt)
-import BEAST, CUDA
+using BEAST: BEAST
+using CUDA: CUDA
 struct AbstractKernelGPU{K}
     blockassembler::Any
 end
@@ -21,9 +22,11 @@ function _make_kernel(
         #     operator, testspace, trialspace; quadstrat=quadstrat
         # )
         BEASTCUDAExt = Base.get_extension(BEAST, :BEASTCUDAExt)
-          if isnothing(BEASTCUDAExt)
-              error("BEASTCUDAExt is not loaded. Ensure CUDA is loaded before calling _make_kernel with gpu=true.")
-          end
+        if isnothing(BEASTCUDAExt)
+            error(
+                "BEASTCUDAExt is not loaded. Ensure CUDA is loaded before calling _make_kernel with gpu=true.",
+            )
+        end
         assembly_functor = BEASTCUDAExt.AssemblyFunctorGPU(
             operator, testspace, trialspace, quadstrat
         )

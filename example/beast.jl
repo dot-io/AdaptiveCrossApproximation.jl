@@ -17,7 +17,10 @@ struct AbstractKernel{K}
 end
 
 function AbstractKernel(
-    operator::BEAST.IntegralOperator, testspace::BEAST.Space, trialspace::BEAST.Space; gpu=false
+    operator::BEAST.IntegralOperator,
+    testspace::BEAST.Space,
+    trialspace::BEAST.Space;
+    gpu=false,
 )
     return AbstractKernel{scalartype(operator)}(
         BEAST.blockassembler(operator, testspace, trialspace; gpu=gpu)

@@ -13,10 +13,12 @@ function AbstractKernel(
 )
     ext = Base.get_extension(AdaptiveCrossApproximation, :ACACUDAExt)
     if ext !== nothing
-        return ext._make_kernel(operator, testspace, trialspace; quadstrat=quadstrat, gpu=gpu)
+        return ext._make_kernel(
+            operator, testspace, trialspace; quadstrat=quadstrat, gpu=gpu
+        )
     end
     assembler = BEAST.blockassembler(operator, testspace, trialspace; quadstrat=quadstrat)
-    return AbstractKernel{scalartype(operator), typeof(assembler)}(assembler)
+    return AbstractKernel{scalartype(operator),typeof(assembler)}(assembler)
 end
 
 function (M::AbstractKernel{K,B})(

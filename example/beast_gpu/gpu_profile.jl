@@ -9,19 +9,15 @@ struct AbstractKernel{K}
 end
 
 function AbstractKernelGPU(
-    operator::BEAST.IntegralOperator,
-    testspace::BEAST.Space,
-    trialspace::BEAST.Space,
+    operator::BEAST.IntegralOperator, testspace::BEAST.Space, trialspace::BEAST.Space
 )
     return AbstractKernel{scalartype(operator)}(
-        BEAST.blockassembler(operator, testspace, trialspace; gpu = true),
+        BEAST.blockassembler(operator, testspace, trialspace; gpu=true)
     )
 end
 
 function (M::AbstractKernel{K})(
-    buf::AbstractArray{K},
-    i::AbstractArray{Int,1},
-    j::AbstractArray{Int,1},
+    buf::AbstractArray{K}, i::AbstractArray{Int,1}, j::AbstractArray{Int,1}
 ) where {K}
     @views store(v, m, n) = (buf[m, n] += v)
     return M.blockassembler(i, j, store)
@@ -47,23 +43,15 @@ end
 m1 = readmesh("./BEAST.jl/test/assets/sphere2.in")
 m2 = readmesh("./BEAST.jl/test/assets/torus.msh")
 
-m1 = meshsphere(radius = 0.5, h = 0.01)
+m1 = meshsphere(; radius=0.5, h=0.01)
 m2 = translate(m1, SVector(2.0, 0.0, 0.0))
 
 op = Helmholtz3D.singlelayer()
 sp1 = lagrangec0d1(m1)
 sp2 = lagrangec0d1(m2)
 
-
-
 function profile()
     K_builtin_profiler = AbstractKernelGPU(op, sp1, sp2)
-    CUDA.@profile run_aca(
-        "---Profiling run---",
-        K_builtin_profiler,
-        sp1,
-        sp2,
-        aca,
-    )
+    CUDA.@profile run_aca("---Profiling run---", K_builtin_profiler, sp1, sp2, aca)
     return nothing
 end

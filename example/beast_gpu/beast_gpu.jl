@@ -21,22 +21,19 @@ function AbstractKernel(
     operator::BEAST.IntegralOperator,
     testspace::BEAST.Space,
     trialspace::BEAST.Space;
-    gpu = false,
+    gpu=false,
 )
     return AbstractKernel{scalartype(operator)}(
-        BEAST.blockassembler_gpu(operator, testspace, trialspace),
+        BEAST.blockassembler_gpu(operator, testspace, trialspace)
     )
 end
 
 function (M::AbstractKernel{K})(
-    buf::AbstractArray{K},
-    i::AbstractArray{Int,1},
-    j::AbstractArray{Int,1},
+    buf::AbstractArray{K}, i::AbstractArray{Int,1}, j::AbstractArray{Int,1}
 ) where {K}
     @views store(v, m, n) = (buf[m, n] += v)
     return M.blockassembler(i, j, store)
 end
-
 
 print("Testing CPU and GPU kernels for one matrix block...\n")
 
@@ -58,27 +55,20 @@ function run_aca(label, K, sp1, sp2, aca)
     return npivots, rowbuffer, colbuffer
 end
 
-K_cpu = AbstractKernel(op, sp1, sp2; gpu = false)
-cpu_npivots, cpu_rowbuffer, cpu_colbuffer =
-    run_aca("CPU run", K_cpu, sp1, sp2, aca)
+K_cpu = AbstractKernel(op, sp1, sp2; gpu=false)
+cpu_npivots, cpu_rowbuffer, cpu_colbuffer = run_aca("CPU run", K_cpu, sp1, sp2, aca)
 
-K_gpu = AbstractKernel(op, sp1, sp2; gpu = true)
-gpu_npivots, gpu_rowbuffer, gpu_colbuffer =
-    run_aca("GPU run", K_gpu, sp1, sp2, aca)
+K_gpu = AbstractKernel(op, sp1, sp2; gpu=true)
+gpu_npivots, gpu_rowbuffer, gpu_colbuffer = run_aca("GPU run", K_gpu, sp1, sp2, aca)
 
 row_max_diff = maximum(abs.(cpu_rowbuffer - gpu_rowbuffer))
 col_max_diff = maximum(abs.(cpu_colbuffer - gpu_colbuffer))
-row_same = isapprox(cpu_rowbuffer, gpu_rowbuffer; rtol = 1e-6, atol = 1e-6)
-col_same = isapprox(cpu_colbuffer, gpu_colbuffer; rtol = 1e-6, atol = 1e-6)
+row_same = isapprox(cpu_rowbuffer, gpu_rowbuffer; rtol=1e-6, atol=1e-6)
+col_same = isapprox(cpu_colbuffer, gpu_colbuffer; rtol=1e-6, atol=1e-6)
 pivots_same = cpu_npivots == gpu_npivots
 
 println(
-    "CPU/GPU match: pivots=",
-    pivots_same,
-    " rowbuffer=",
-    row_same,
-    " colbuffer=",
-    col_same,
+    "CPU/GPU match: pivots=", pivots_same, " rowbuffer=", row_same, " colbuffer=", col_same
 )
 println("Max abs diff: rowbuffer=", row_max_diff, " colbuffer=", col_max_diff)
 

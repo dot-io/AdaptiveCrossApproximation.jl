@@ -64,5 +64,7 @@ row_same = isapprox(cpu_rowbuffer, gpu_rowbuffer; rtol=1e-6, atol=1e-6)
 col_same = isapprox(cpu_colbuffer, gpu_colbuffer; rtol=1e-6, atol=1e-6)
 pivots_same = cpu_npivots == gpu_npivots
 
-println("CPU/GPU match: pivots=", pivots_same, " rowbuffer=", row_same, " colbuffer=", col_same)
+println(
+    "CPU/GPU match: pivots=", pivots_same, " rowbuffer=", row_same, " colbuffer=", col_same
+)
 println("Max abs diff: rowbuffer=", row_max_diff, " colbuffer=", col_max_diff)

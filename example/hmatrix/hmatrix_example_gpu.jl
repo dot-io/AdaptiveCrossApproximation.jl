@@ -78,7 +78,9 @@ println("CPU vs GPU diff: ", norm(y_cpu - y_gpu) / norm(y_ref))
 for (level_cpu, level_gpu) in zip(hmat.farinteractions, hmat_gpu.farinteractions)
     for (tg_cpu, tg_gpu) in zip(level_cpu, level_gpu)
         for (blk_cpu, blk_gpu) in zip(tg_cpu, tg_gpu)
-            println("Block error (1 is best): ", estimate_reldifference(blk_cpu.M, blk_gpu.M))
+            println(
+                "Block error (1 is best): ", estimate_reldifference(blk_cpu.M, blk_gpu.M)
+            )
         end
     end
 end

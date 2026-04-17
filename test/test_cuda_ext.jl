@@ -1,71 +1,68 @@
 using Test
-using AdaptiveCrossApproximation
 using CUDA
 using LinearAlgebra
+using BEAST: IntegralOperator, Space, lagrangec0d1, Helmholtz3D, Maxwell3D, raviartthomas, DoubleNumSauterQstrat, scalartype
+using CompScienceMeshes: meshsphere, meshrectangle
+using H2Trees
+using ParallelKMeans
+using LinearMaps
+using BlockSparseMatrices
 
-@testset "CUDA extension: ACA on CuArray" begin
-    if !CUDA.functional()
-        @info "CUDA is not functional on this machine; skipping CUDA extension tests."
-        return nothing
-    end
+include("../example/hmatrix/skeletons.jl")
+include("../example/hmatrix/hmatrix.jl")
+include("../example/hmatrix/calculate_error.jl")
 
-    Tlist = (Float32, Float64)
-
-    for T in Tlist
-        @testset "CuArray ACA ($T)" begin
-            m, n = 48, 40
-            rtrue = 4
-
-            U0 = rand(T, m, rtrue)
-            V0 = rand(T, rtrue, n)
-            M_cpu = U0 * V0
-            M_gpu = CuArray(M_cpu)
-
-            tol = T(1e-6)
-            maxrank = 10
-
-            A_gpu, B_gpu = AdaptiveCrossApproximation.aca(
-                M_gpu;
-                tol=tol,
-                rowpivoting=MaximumValue(),
-                columnpivoting=MaximumValue(),
-                convergence=FNormEstimator(tol),
-                maxrank=maxrank,
-                svdrecompress=false,
-            )
-
-            A = Array(A_gpu)
-            B = Array(B_gpu)
-
-            @test size(A, 1) == m
-            @test size(B, 2) == n
-            @test size(A, 2) == size(B, 1)
-            @test size(A, 2) <= maxrank
-            @test size(A, 2) >= 1
-
-            relerr = norm(M_cpu - A * B) / max(norm(M_cpu), eps(T))
-            @test relerr <= T(5e-3)
-        end
-    end
+struct Problem
+    op::IntegralOperator
+    X::Space
 end
 
-@testset "CUDA extension: unsupported strategy errors on CuArray path" begin
+@testset "ACA CUDA Extension" begin
     if !CUDA.functional()
-        @info "CUDA is not functional on this machine; skipping CUDA extension tests."
+        @warn "CUDA is not functional on this machine; skipping CUDA extension tests."
         return nothing
     end
 
-    T = Float32
-    m, n = 16, 12
-    M = CuArray(rand(T, m, n))
+    ResolutionList = (1.0, 0.5)
+    ProblemList::Vector{Problem} = []
+    for res in ResolutionList
 
-    @test_throws ArgumentError aca(
-        M;
-        tol=T(1e-4),
-        rowpivoting=MaximumValue(),
-        columnpivoting=MaximumValue(),
-        convergence=AdaptiveCrossApproximation.FNormExtrapolator(T(1e-4)),
-        maxrank=6,
-        svdrecompress=false,
-    )
+    # I try to limit testing to domains that are interesting in terms of correctness/runtime
+    # 1. Low wavenumber on smooth surface with piecewise constant basis
+    # 2. High wavenumber on smooth surface with piecewise constant basis
+    # 3. High wavenumber on surface with discontinuities
+    append!(ProblemList, [
+        Problem(Helmholtz3D.singlelayer(; wavenumber=0.1), lagrangec0d1(meshsphere(1.0, res))),
+        Problem(Helmholtz3D.singlelayer(; wavenumber=10.0), lagrangec0d1(meshsphere(1.0, res))),
+        Problem(Helmholtz3D.singlelayer(; wavenumber=10.0), lagrangec0d1(meshrectangle(1.0, 1.0, res))),
+        Problem(Maxwell3D.singlelayer(; wavenumber=5.0), raviartthomas(meshsphere(1.0, res)))
+        ])
+    end
+    for problem in ProblemList
+        @testset "CUDA-accelerated ACA on operator $(typeof(problem.op)), with basis $(typeof(problem.X))" begin
+
+            ttree = H2Trees.KMeansTree(problem.X.pos, 2; minvalues=5)
+            tree = BlockTree(ttree, ttree)
+
+            t_cpu = @elapsed hmat = HMatrix(
+                problem.op,
+                problem.X,
+                problem.X,
+                tree;
+                nearquadstrat=DoubleNumSauterQstrat(4, 4, 6, 6, 6, 6),
+                farquadstrat=DoubleNumSauterQstrat(2, 3, 1, 1, 1, 1),
+                gpu=false,
+            )
+            t_gpu = @elapsed hmat_gpu = HMatrix(
+                problem.op,
+                problem.X,
+                problem.X,
+                tree;
+                nearquadstrat=DoubleNumSauterQstrat(4, 4, 6, 6, 6, 6),
+                farquadstrat=DoubleNumSauterQstrat(2, 3, 1, 1, 1, 1),
+                gpu=true,
+            )
+            @test calculate_error(hmat, hmat_gpu) ≈ 0.0 atol=1e-12
+        end
+    end
 end

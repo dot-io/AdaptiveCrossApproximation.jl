@@ -1,5 +1,5 @@
-function estimate_norm(mat; tol=1e-4, itmax = 1000)
-    v = rand(size(mat,2))
+function estimate_norm(mat; tol=1e-4, itmax=1000)
+    v = rand(size(mat, 2))
 
     v = v/norm(v)
     itermin = 3
@@ -19,12 +19,14 @@ function estimate_norm(mat; tol=1e-4, itmax = 1000)
     return sqrt(σnew)
 end
 
-function estimate_reldifference(hmat::H, refmat; tol=1e-4) where {F, H <: LinearMaps.LinearMap{F}}
+function estimate_reldifference(
+    hmat::H, refmat; tol=1e-4
+) where {F,H<:LinearMaps.LinearMap{F}}
     #if size(hmat) != size(refmat)
     #    error("Dimensions of matrices do not match")
     #end
 
-    v = rand(F, size(hmat,2))
+    v = rand(F, size(hmat, 2))
 
     v = v/norm(v)
     itermin = 3
@@ -32,9 +34,9 @@ function estimate_reldifference(hmat::H, refmat; tol=1e-4) where {F, H <: Linear
     σold = 1
     σnew = 1
     # @info "Estimate norm of h matrix"
-    norm_hmat = estimate_norm(hmat, tol=tol)
+    norm_hmat = estimate_norm(hmat; tol=tol)
     # @info "Estimate norm of reference matrix"
-    norm_refmat = estimate_norm(refmat, tol=tol)
+    norm_refmat = estimate_norm(refmat; tol=tol)
 
     return norm_hmat/norm_refmat
 end
