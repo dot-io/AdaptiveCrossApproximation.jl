@@ -1,7 +1,7 @@
 # GPU-compatible kernel type and constructor dispatch.
 # Inspired by Joshua Tetzner's `abstractbeastmatrix.jl` definitions.
 # BEASTCUDAExt = Base.get_extension(BEAST, :BEASTCUDAExt)
-
+import BEAST, CUDA
 struct AbstractKernelGPU{K}
     blockassembler::Any
 end
@@ -49,12 +49,6 @@ function (M::AbstractKernelGPU{K})(
     return M.blockassembler(i, j, store)
 end
 
-AdaptiveCrossApproximation.nextrc!(buf, A::AbstractKernelGPU, i, j) = begin
-println(buf)
-tmp = A(buf, i, j)
-println(buf)
-error()
-return tmp
-end
+AdaptiveCrossApproximation.nextrc!(buf, A::AbstractKernelGPU, i, j) = A(buf, i, j)
 
 export AbstractKernelGPU

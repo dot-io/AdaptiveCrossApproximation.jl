@@ -137,7 +137,7 @@ function (aca::ACA{RP,CP,C})(
     rowidcs::Vector{Int},
     colidcs::Vector{Int},
     maxrank::Int,
-) where {T<:AbstractFloat,RP<:PivStrat,CP<:PivStrat,C<:ConvCrit}
+) where {T<:Number,RP<:PivStrat,CP<:PivStrat,C<:ConvCrit}
     # Restrict this CUDA path to MaximumValue + FNormEstimator.
     if !(
         aca.rowpivoting isa MaximumValue &&
