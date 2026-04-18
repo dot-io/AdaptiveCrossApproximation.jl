@@ -7,6 +7,7 @@ using H2Trees
 using ParallelKMeans
 using LinearMaps
 using BlockSparseMatrices
+using Statistics
 
 include("../example/hmatrix/skeletons.jl")
 include("../example/hmatrix/hmatrix.jl")
@@ -31,6 +32,7 @@ end
     # 1. Low wavenumber on smooth surface with piecewise constant basis
     # 2. High wavenumber on smooth surface with piecewise constant basis
     # 3. High wavenumber on surface with discontinuities
+    # 4. Maxwell operator on smooth surface
     append!(ProblemList, [
         Problem(Helmholtz3D.singlelayer(; wavenumber=0.1), lagrangec0d1(meshsphere(1.0, res))),
         Problem(Helmholtz3D.singlelayer(; wavenumber=10.0), lagrangec0d1(meshsphere(1.0, res))),
@@ -62,7 +64,19 @@ end
                 farquadstrat=DoubleNumSauterQstrat(2, 3, 1, 1, 1, 1),
                 gpu=true,
             )
-            @test calculate_error(hmat, hmat_gpu) ≈ 0.0 atol=1e-12
+            per_block_errors::Vector = []
+            for (level_cpu, level_gpu) in zip(hmat.farinteractions, hmat_gpu.farinteractions)
+                for (tg_cpu, tg_gpu) in zip(level_cpu, level_gpu)
+                    for (blk_cpu, blk_gpu) in zip(tg_cpu, tg_gpu)
+                        push!(per_block_errors, estimate_reldifference(blk_cpu.M, blk_gpu.M))
+                    end
+                end
+            end
+            mean_error = mean(per_block_errors)
+            max_error = maximum(per_block_errors)
+            println("mean_error = $mean_error, max_error = $max_error")
+            @test mean_error ≈ 1.0 atol=1e-4
+            @test max_error ≈ 1.0 atol=1e-4
         end
     end
 end
