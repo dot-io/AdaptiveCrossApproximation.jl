@@ -1,8 +1,16 @@
 using Test
 using CUDA
 using LinearAlgebra
-using BEAST: IntegralOperator, Space, lagrangec0d1, Helmholtz3D, Maxwell3D, raviartthomas, DoubleNumSauterQstrat, scalartype
-using CompScienceMeshes: meshsphere, meshrectangle
+using BEAST:
+    IntegralOperator,
+    Space,
+    lagrangec0d1,
+    Helmholtz3D,
+    Maxwell3D,
+    raviartthomas,
+    DoubleNumSauterQstrat,
+    scalartype
+using CompScienceMeshes: meshsphere, meshcuboid
 using H2Trees
 using ParallelKMeans
 using LinearMaps
@@ -16,6 +24,7 @@ include("../example/hmatrix/calculate_error.jl")
 struct Problem
     op::IntegralOperator
     X::Space
+    resolution::Float64
 end
 
 @testset "ACA CUDA Extension" begin
@@ -24,28 +33,50 @@ end
         return nothing
     end
 
-    ResolutionList = (1.0, 0.5)
+    ResolutionList = (0.5, 0.2)
     ProblemList::Vector{Problem} = []
     for res in ResolutionList
 
-    # I try to limit testing to domains that are interesting in terms of correctness/runtime
-    # 1. Low wavenumber on smooth surface with piecewise constant basis
-    # 2. High wavenumber on smooth surface with piecewise constant basis
-    # 3. High wavenumber on surface with discontinuities
-    # 4. Maxwell operator on smooth surface
-    append!(ProblemList, [
-        Problem(Helmholtz3D.singlelayer(; wavenumber=0.1), lagrangec0d1(meshsphere(1.0, res))),
-        Problem(Helmholtz3D.singlelayer(; wavenumber=10.0), lagrangec0d1(meshsphere(1.0, res))),
-        Problem(Helmholtz3D.singlelayer(; wavenumber=10.0), lagrangec0d1(meshrectangle(1.0, 1.0, res))),
-        Problem(Maxwell3D.singlelayer(; wavenumber=5.0), raviartthomas(meshsphere(1.0, res)))
-        ])
+        # I try to limit testing to domains that are interesting in terms of correctness/runtime differences
+        # 1. Low wavenumber on smooth surface with piecewise constant basis
+        # 2. High wavenumber on smooth surface with piecewise constant basis
+        # 3. High wavenumber on surface with discontinuities
+        # 4. Maxwell operator on smooth surface
+        append!(
+            ProblemList,
+            [
+                Problem(
+                    Helmholtz3D.singlelayer(; wavenumber=0.1),
+                    lagrangec0d1(meshsphere(1.0, res)),
+                    res,
+                ),
+                Problem(
+                    Helmholtz3D.singlelayer(; wavenumber=10.0),
+                    lagrangec0d1(meshsphere(1.0, res)),
+                    res,
+                ),
+                Problem(
+                    Helmholtz3D.singlelayer(; wavenumber=10.0),
+                    lagrangec0d1(meshcuboid(1.0, 1.0, 1.0, res)),
+                    res,
+                ),
+                Problem(
+                    Maxwell3D.singlelayer(; wavenumber=5.0),
+                    raviartthomas(meshsphere(1.0, res)),
+                    res,
+                ),
+            ],
+        )
     end
     for problem in ProblemList
-        @testset "CUDA-accelerated ACA on operator $(typeof(problem.op)), with basis $(typeof(problem.X))" begin
+        @testset "CUDA-accelerated ACA on operator $(typeof(problem.op)), with basis $(typeof(problem.X)) and edge length $(problem.resolution)" begin
+
+            println("starting:CUDA-accelerated ACA on operator $(typeof(problem.op)), with basis $(typeof(problem.X)) and edge length $(problem.resolution)")
 
             ttree = H2Trees.KMeansTree(problem.X.pos, 2; minvalues=5)
             tree = BlockTree(ttree, ttree)
 
+            println("CPU Matrix construction:")
             t_cpu = @elapsed hmat = HMatrix(
                 problem.op,
                 problem.X,
@@ -55,6 +86,8 @@ end
                 farquadstrat=DoubleNumSauterQstrat(2, 3, 1, 1, 1, 1),
                 gpu=false,
             )
+
+            println("GPU Matrix construction:")
             t_gpu = @elapsed hmat_gpu = HMatrix(
                 problem.op,
                 problem.X,
@@ -65,10 +98,13 @@ end
                 gpu=true,
             )
             per_block_errors::Vector = []
-            for (level_cpu, level_gpu) in zip(hmat.farinteractions, hmat_gpu.farinteractions)
+            for (level_cpu, level_gpu) in
+                zip(hmat.farinteractions, hmat_gpu.farinteractions)
                 for (tg_cpu, tg_gpu) in zip(level_cpu, level_gpu)
                     for (blk_cpu, blk_gpu) in zip(tg_cpu, tg_gpu)
-                        push!(per_block_errors, estimate_reldifference(blk_cpu.M, blk_gpu.M))
+                       push!(
+                            per_block_errors, estimate_reldifference(blk_cpu.M, blk_gpu.M)
+                        )
                     end
                 end
             end

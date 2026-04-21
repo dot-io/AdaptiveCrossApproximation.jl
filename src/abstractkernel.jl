@@ -9,12 +9,12 @@ function AbstractKernel(
     testspace::BEAST.Space,
     trialspace::BEAST.Space;
     quadstrat=BEAST.defaultquadstrat(operator, testspace, trialspace),
-    gpu=false,
+    gpu=false
 )
     ext = Base.get_extension(AdaptiveCrossApproximation, :ACACUDAExt)
-    if ext !== nothing
+    if ext !== nothing && gpu
         return ext._make_kernel(
-            operator, testspace, trialspace; quadstrat=quadstrat, gpu=gpu
+            operator, testspace, trialspace; quadstrat=quadstrat
         )
     end
     assembler = BEAST.blockassembler(operator, testspace, trialspace; quadstrat=quadstrat)

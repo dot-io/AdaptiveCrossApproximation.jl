@@ -89,7 +89,7 @@ function HMatrix(
     lk = Threads.SpinLock()
     T = scalartype(operator)
 
-    nearmatrix = AbstractKernel(operator, testspace, trialspace; quadstrat=nearquadstrat)
+    nearmatrix = AbstractKernel(operator, testspace, trialspace; quadstrat=nearquadstrat, gpu=false)
     values, nearvalues = H2Trees.nearinteractions(
         tree; isnear=isnear, extractselfvalues=false
     )
@@ -111,7 +111,8 @@ function HMatrix(
     # Allows easy multithreading in MV
     #
     # _make_kernel is a helper function which decides at-runtime to use the CPU or GPU
-    farmatrix = AbstractKernel(
+
+        farmatrix = AbstractKernel(
         operator, testspace, trialspace; quadstrat=farquadstrat, gpu=gpu
     )
     iterator = H2Trees.WellSeparatedIterator(; isnear=(tree) -> isnear)(tree)
