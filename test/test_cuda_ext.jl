@@ -88,6 +88,16 @@ end
             )
 
             println("GPU Matrix construction:")
+
+            CUDA.@profile HMatrix(
+                            problem.op,
+                            problem.X,
+                            problem.X,
+                            tree;
+                            nearquadstrat=DoubleNumSauterQstrat(4, 4, 6, 6, 6, 6),
+                            farquadstrat=DoubleNumSauterQstrat(2, 3, 1, 1, 1, 1),
+                            gpu=true,
+                        )
             t_gpu = @elapsed hmat_gpu = HMatrix(
                 problem.op,
                 problem.X,

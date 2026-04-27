@@ -10,6 +10,7 @@ using LinearAlgebra
 using LinearMaps
 using OhMyThreads
 using StaticArrays: SVector
+using CUDA
 
 include("skeletons.jl")
 include("hmatrix.jl")
@@ -19,7 +20,7 @@ include("calculate_error.jl")
 
 λ = 0.5
 k = 2π / λ
-Γ = meshsphere(1.0, 1.0)
+Γ = meshsphere(1.0, 0.25)
 Γ2 = translate(Γ, SVector{3}(0.0, 0.0, 4.0))
 
 op = Maxwell3D.singlelayer(; wavenumber=k)
@@ -75,12 +76,12 @@ println("CPU vs GPU diff: ", norm(y_cpu - y_gpu) / norm(y_ref))
 # println(first(first(hmat_gpu.farinteractions)), last(last(hmat_gpu.farinteractions)))
 #estimate_norm(hmat.nearinteractions - hmat_gpu.nearinteractions)
 
-for (level_cpu, level_gpu) in zip(hmat.farinteractions, hmat_gpu.farinteractions)
-    for (tg_cpu, tg_gpu) in zip(level_cpu, level_gpu)
-        for (blk_cpu, blk_gpu) in zip(tg_cpu, tg_gpu)
-            println(
-                "Block error (1 is best): ", estimate_reldifference(blk_cpu.M, blk_gpu.M)
-            )
-        end
-    end
-end
+# for (level_cpu, level_gpu) in zip(hmat.farinteractions, hmat_gpu.farinteractions)
+#     for (tg_cpu, tg_gpu) in zip(level_cpu, level_gpu)
+#         for (blk_cpu, blk_gpu) in zip(tg_cpu, tg_gpu)
+#             println(
+#                 "Block error (1 is best): ", estimate_reldifference(blk_cpu.M, blk_gpu.M)
+#             )
+#         end
+#     end
+# end

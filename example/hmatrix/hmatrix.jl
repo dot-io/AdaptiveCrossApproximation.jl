@@ -85,6 +85,7 @@ function HMatrix(
     maxrank=30,
     ntasks=Threads.nthreads(),
     gpu=false,
+    block_size_threshold=128,
 )
     lk = Threads.SpinLock()
     T = scalartype(operator)
@@ -112,9 +113,12 @@ function HMatrix(
     #
     # _make_kernel is a helper function which decides at-runtime to use the CPU or GPU
 
-        farmatrix = AbstractKernel(
+    farmatrix = AbstractKernel(
         operator, testspace, trialspace; quadstrat=farquadstrat, gpu=gpu
     )
+    cpu_farmatrix = gpu ? AbstractKernel(
+        operator, testspace, trialspace; quadstrat=farquadstrat, gpu=false
+    ) : farmatrix
     iterator = H2Trees.WellSeparatedIterator(; isnear=(tree) -> isnear)(tree)
     farinteractions = Vector{Vector{MatrixBlock{Int,T,LowRankMatrix{T}}}}[]
 
@@ -137,8 +141,10 @@ function HMatrix(
                 rows = zeros(Int, maxrank)
                 cols = zeros(Int, maxrank)
 
+                kernel = length(tvals) * length(svals) >= block_size_threshold ?
+                    farmatrix : cpu_farmatrix
                 npivots = compressor(
-                    farmatrix,
+                    kernel,
                     view(colbuffer, tvals, 1:maxrank),
                     view(localrowbuffer, 1:maxrank, svals),
                     min(maxrank, min(length(tvals), length(svals)));
