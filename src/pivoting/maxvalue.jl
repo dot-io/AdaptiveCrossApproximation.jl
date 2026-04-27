@@ -1,4 +1,3 @@
-
 """
     MaximumValue <: ValuePivStrat
 
@@ -11,63 +10,45 @@ approximation quality.
 """
 struct MaximumValue <: ValuePivStrat end
 
-"""
-    MaximumValueFunctor <: ValuePivStratFunctor
-
-Stateful functor that tracks which indices have been used during pivot selection.
-
-Created by calling a [`MaximumValue`](@ref) instance with length or index information.
-Maintains a boolean vector to ensure each index is selected at most once.
-
-# Fields
-
-  - `usedidcs::Vector{Bool}`: Tracks which indices have been selected as pivots
-"""
-struct MaximumValueFunctor <: ValuePivStratFunctor
+mutable struct MaximumValueFunctor <: ValuePivStratFunctor
+    nactive::Int
     usedidcs::Vector{Bool}
 end
 
-"""
-    (::MaximumValue)(idcs::AbstractArray{Int})
+(::MaximumValue)(idcs::AbstractVector{<:Integer}) =
+    MaximumValueFunctor(length(idcs), zeros(Bool, length(idcs)))
+(::MaximumValue)(nidcs::Int) = MaximumValueFunctor(nidcs, zeros(Bool, nidcs))
 
-Create a `MaximumValueFunctor` for the given index array.
+function Base.resize!(pivstrat::MaximumValueFunctor, nactive::Int)
+    length(pivstrat.usedidcs) < nactive && resize!(pivstrat.usedidcs, nactive)
+    pivstrat.nactive = nactive
+    return nothing
+end
 
-Returns a functor with tracking vector sized to match the length of `idcs`.
-"""
-(::MaximumValue)(idcs::AbstractArray{Int}) = MaximumValueFunctor(zeros(Bool, length(idcs)))
+function reset!(pivstrat::MaximumValueFunctor, idcs::AbstractVector{<:Integer})
+    resize!(pivstrat, length(idcs))
+    fill!(view(pivstrat.usedidcs, 1:(pivstrat.nactive)), false)
+    return nothing
+end
 
-"""
-    (pivstrat::MaximumValueFunctor)()
-
-Select the first index as the initial pivot.
-
-Returns `1` and marks it as used. Used when no row/column data is available yet.
-"""
 function (pivstrat::MaximumValueFunctor)()
+    @assert pivstrat.nactive >= 1
     pivstrat.usedidcs[1] = true
     return 1
 end
 
-"""
-    (pivstrat::MaximumValueFunctor)(rc::AbstractArray)
-
-Select the unused index with maximum absolute value in `rc`.
-
-Searches through all unused indices, finds the one with largest `abs(rc[i])`,
-marks it as used, and returns its index.
-
-# Arguments
-
-  - `rc::AbstractArray`: Row or column data to select from
-
-# Returns
-
-  - `nextidx::Int`: Index of the maximum absolute value among unused indices
-"""
 function (pivstrat::MaximumValueFunctor)(rc::AbstractArray)
+    nactive = pivstrat.nactive
+    used = view(pivstrat.usedidcs, 1:nactive)
+
+    if all(used)
+        absrx = abs.(view(rc, 1:nactive))
+        maximum(absrx) != 0.0 && (return argmax(absrx))
+    end
+
     nextidx = 1
     maxval = 0.0
-    for i in eachindex(pivstrat.usedidcs)
+    for i in 1:nactive
         if (!pivstrat.usedidcs[i]) && abs(rc[i]) >= maxval
             nextidx = i
             maxval = abs(rc[i])
