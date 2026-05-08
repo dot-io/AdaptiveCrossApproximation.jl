@@ -135,27 +135,9 @@ children(tree::T, node::Int) where {T} = error("Not implemented for type $T")
 parent(tree::T, node::Int) where {T} = error("Not implemented for type $T")
 firstchild(tree::T, node::Int) where {T} = error("Not implemented for type $T")
 
-<<<<<<< HEAD
-"""
-    findcluster(pivstrat, F)
-
-Find a leaf cluster (node) for first pivot that best matches the reference centroid.
-
-Traverses the tree greedily by choosing child clusters whose centers are
-closest (in weighted inverse-distance sense) to the reference centroid `pivstrat.c`.
-Returns a node index whose `firstchild` is zero (leaf) or recurses into children.
-"""
-function findcluster(
-    pivstrat::TreeMimicryPivotingFunctor{D,T}, F::Vector{I}
-) where {D,T<:Real,I}
-    w = zeros(T, length(F))
-    for (idx, f) in enumerate(F)
-        w[idx] = 1 / norm(center(pivstrat.tree, f) - pivstrat.c)
-=======
 @inline function _is_emptycluster(pivstrat::TreeMimicryPivotingFunctor, node::Int)
     @inbounds for i in 1:(pivstrat.nempty)
         pivstrat.emptyclusters[i] == node && return true
->>>>>>> 7b1a1ac1cd957a184be94ba46753001e325956dc
     end
     return false
 end
@@ -234,41 +216,6 @@ function findcluster(
             pivstrat.leja[i] *= dist
         end
     end
-<<<<<<< HEAD
-    cluster = F[argmax(leja .^ (2 / (npivot - 1)) .* h .* w .^ 4)]
-
-    #iszero(firstchild(pivstrat.tree, cluster)) && return cluster
-    # Increased rescue measure, check performance!!!!
-    if iszero(firstchild(pivstrat.tree, cluster))
-        if issubset(values(pivstrat.tree, cluster), pivstrat.usedidcs)
-            if length(F) == 1
-                pivstrat.emptyclusters[findfirst(pivstrat.emptyclusters .== 0)] = parent(
-                    pivstrat.tree, cluster
-                )
-                return findcluster(
-                    pivstrat, setdiff(pivstrat.F, pivstrat.emptyclusters), npivot
-                )
-            else
-                pivstrat.emptyclusters[findfirst(pivstrat.emptyclusters .== 0)] = cluster
-                deleteat!(F, findfirst(F .== cluster))
-                return findcluster(pivstrat, F, npivot)
-            end
-        else
-            return cluster
-        end
-    end
-
-    if setdiff(collect(children(pivstrat.tree, cluster)), pivstrat.emptyclusters) == []
-        pivstrat.emptyclusters[findfirst(pivstrat.emptyclusters .== 0)] = cluster
-        return findcluster(pivstrat, setdiff(pivstrat.F, pivstrat.emptyclusters), npivot)
-    else
-        return findcluster(
-            pivstrat,
-            setdiff(collect(children(pivstrat.tree, cluster)), pivstrat.emptyclusters),
-            npivot,
-        )
-    end
-=======
     node = idcs[bestindex(pivstrat.leja, pivstrat.h, pivstrat.w, nlocal, npivot)]
 
     # Might need rescue measure here!!!
@@ -283,7 +230,6 @@ function findcluster(
         return findcluster(pivstrat, activefarfield, npivot)
     end
     return findcluster(pivstrat, chds, npivot)
->>>>>>> 7b1a1ac1cd957a184be94ba46753001e325956dc
 end
 
 function (pivstrat::TreeMimicryPivotingFunctor{D,F})() where {D,F<:Real}

@@ -1,43 +1,37 @@
 name = "AdaptiveCrossApproximation"
 uuid = "ef3ffb92-1c7b-43b8-a0d7-a7e2ce4fd1e5"
-version = "0.1.0"
+version = "0.2.1"
 authors = ["JoshuaTetzner <joshua.tetzner@uni-rostock.de>"]
 
 [deps]
-BEAST = "bb4162c7-ba94-5a20-af32-d8ec4428bdd1"
 BlockSparseMatrices = "1ef78180-cc57-4e70-b6ec-c3e471307147"
-CompScienceMeshes = "3e66a162-7b8c-5da0-b8f8-124ecd2c3ae1"
-H2Trees = "9db26ae3-82ff-4374-85e9-9ed87405fd16"
-JuliaFormatter = "98e50ef6-434e-11e9-1051-2b60c6c9e899"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LinearMaps = "7a12625a-238d-50fd-b39a-03d52299707e"
 OhMyThreads = "67456a42-1dca-4109-a031-0a68de7e3ad5"
-ParallelKMeans = "42b8e9d4-006b-409a-8472-7f34b3fb58af"
 Polynomials = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [weakdeps]
-CUBLAS = "be33ccc6-a3ff-5ff2-a52e-74243cff1e17"
-CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-
-[sources]
-BEAST = {path = "/home/students/em/nathmest/BEAST.jl"}
+BEAST = "bb4162c7-ba94-5a20-af32-d8ec4428bdd1"
+H2Trees = "9db26ae3-82ff-4374-85e9-9ed87405fd16"
 
 [extensions]
-ACACUDAExt = ["CUDA"]
+ACABEAST = ["BEAST"]
 ACAH2Trees = ["H2Trees"]
 
 [compat]
+BEAST = "2.8.0"
 BlockSparseMatrices = "0.3.1"
-H2Trees = "0.2.0"
-JuliaFormatter = "2.3.0"
+CompScienceMeshes = "0.9.0 - 0.11.0"
+H2Trees = "0.1, 0.2, 0.3"
 LinearMaps = "3.11.4"
-OhMyThreads = "0.8.5"
+OhMyThreads = "0.8.4"
 ParallelKMeans = "1.1.0"
 Polynomials = "4.1.0"
 SparseArrays = "1.12.0"
 StaticArrays = "1.9.13"
+julia = "1.10"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
