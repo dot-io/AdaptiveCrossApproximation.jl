@@ -90,7 +90,9 @@ function HMatrix(
     lk = Threads.SpinLock()
     T = scalartype(operator)
 
-    nearmatrix = AbstractKernel(operator, testspace, trialspace; quadstrat=nearquadstrat, gpu=false)
+    nearmatrix = AbstractKernel(
+        operator, testspace, trialspace; quadstrat=nearquadstrat, gpu=false
+    )
     values, nearvalues = H2Trees.nearinteractions(
         tree; isnear=isnear, extractselfvalues=false
     )
@@ -111,14 +113,17 @@ function HMatrix(
     # one level, each Dict contains the nodes on the level.
     # Allows easy multithreading in MV
     #
-    # _make_kernel is a helper function which decides at-runtime to use the CPU or GPU
+    # _make_kernel was a helper that decided at runtime to use CPU or GPU assembly
+    # In the new API, use GPUBlockAssembler from the ACACUDAExt extension
 
     farmatrix = AbstractKernel(
         operator, testspace, trialspace; quadstrat=farquadstrat, gpu=gpu
     )
-    cpu_farmatrix = gpu ? AbstractKernel(
-        operator, testspace, trialspace; quadstrat=farquadstrat, gpu=false
-    ) : farmatrix
+    cpu_farmatrix = if gpu
+        AbstractKernel(operator, testspace, trialspace; quadstrat=farquadstrat, gpu=false)
+    else
+        farmatrix
+    end
     iterator = H2Trees.WellSeparatedIterator(; isnear=(tree) -> isnear)(tree)
     farinteractions = Vector{Vector{MatrixBlock{Int,T,LowRankMatrix{T}}}}[]
 
@@ -141,8 +146,11 @@ function HMatrix(
                 rows = zeros(Int, maxrank)
                 cols = zeros(Int, maxrank)
 
-                kernel = length(tvals) * length(svals) >= block_size_threshold ?
-                    farmatrix : cpu_farmatrix
+                kernel = if length(tvals) * length(svals) >= block_size_threshold
+                    farmatrix
+                else
+                    cpu_farmatrix
+                end
                 npivots = compressor(
                     kernel,
                     view(colbuffer, tvals, 1:maxrank),

@@ -36,9 +36,8 @@ function (convcrit::CombinedConvCrit)(
     return CombinedConvCritFunctor(curr_crits, ones(Bool, length(curr_crits)))
 end
 
-_buildconvcrit(cc::CombinedConvCrit, A, rowidcs, colidcs, maxrank) = cc(
-    A, rowidcs, colidcs; maxrank=maxrank
-)
+_buildconvcrit(cc::CombinedConvCrit, A, rowidcs, colidcs, maxrank) =
+    cc(A, rowidcs, colidcs; maxrank=maxrank)
 
 function reset!(
     convcrit::CombinedConvCritFunctor,
@@ -72,4 +71,10 @@ function (convcrit::CombinedConvCritFunctor)(
     end
 
     return npivot, any(convcrit.isconverged)
+end
+
+function tolerance(convcrit::CombinedConvCritFunctor)
+    # Return the minimum tolerance among all constituent criteria
+    tols = [tolerance(c) for c in convcrit.crits]
+    return minimum(tols)
 end

@@ -30,6 +30,7 @@ function reset!(convcrit::FNormEstimatorFunctor)
 end
 
 tolerance(cc::FNormEstimator) = cc.tol
+tolerance(cc::FNormEstimatorFunctor) = cc.tol
 
 function (convcrit::FNormEstimatorFunctor{F})(
     rowbuffer::AbstractMatrix{K},

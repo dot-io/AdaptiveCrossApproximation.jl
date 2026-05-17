@@ -1,105 +1,97 @@
-"""
-Test file to compare the performance of CPU vs GPU-accelerated (partially) code for different system matrix sizes to assemble.
-"""
+# ---------------------------------------------------------------------------
+# GPU vs CPU performance comparison for ACA compression
+# ---------------------------------------------------------------------------
+#
+# Compares wall-clock time for CPU vs GPU assembly+compression across
+# varying problem sizes. Uses the new GPUBlockAssembler API.
+#
+# Prerequisites: BEAST.jl with CUDA support (BEASTCUDAExt)
+# ---------------------------------------------------------------------------
 
 using AdaptiveCrossApproximation
 using BEAST
 using CompScienceMeshes
 using StaticArrays
 using CUDA
-using Plots
 
-struct AbstractKernel{K}
-    blockassembler::Function
-end
+# ── CPU helper ────────────────────────────────────────────────────────────
 
-function AbstractKernelGPU(
-    operator::BEAST.IntegralOperator, testspace::BEAST.Space, trialspace::BEAST.Space
-)
-    return AbstractKernel{scalartype(operator)}(
-        BEAST.blockassembler(operator, testspace, trialspace; gpu=true)
+function run_aca_cpu(op, sp1, sp2; tol=1e-4, maxrank=40)
+    aca = ACA(
+        AdaptiveCrossApproximation.MaximumValue(),
+        AdaptiveCrossApproximation.MaximumValue(),
+        AdaptiveCrossApproximation.FNormEstimator(tol),
     )
-end
-
-function AbstractKernel(
-    operator::BEAST.IntegralOperator, testspace::BEAST.Space, trialspace::BEAST.Space
-)
-    return AbstractKernel{scalartype(operator)}(
-        BEAST.blockassembler(operator, testspace, trialspace; gpu=false)
-    )
-end
-
-function (M::AbstractKernel{K})(
-    buf::AbstractArray{K}, i::AbstractArray{Int,1}, j::AbstractArray{Int,1}
-) where {K}
-    @views store(v, m, n) = (buf[m, n] += v)
-    return M.blockassembler(i, j, store)
-end
-
-AdaptiveCrossApproximation.nextrc!(buf, A::AbstractKernel, i, j) = A(buf, i, j)
-
-# Important: program will error if maxrank is larger than number of cells in test/trial space
-function run_aca(label, K::AbstractKernel, sp1, sp2, aca; maxrank=40)
-    println(label)
+    K = AdaptiveCrossApproximation.AbstractKernelMatrix(op, sp1, sp2)
     rowbuffer = zeros(Float64, maxrank, length(sp2.pos))
     colbuffer = zeros(Float64, length(sp1.pos), maxrank)
-    @time npivots = aca(K, rowbuffer, colbuffer, maxrank)
-    println("Pivots: ", npivots)
-    return npivots, rowbuffer, colbuffer
+    res = @timed npivots = aca(
+        K,
+        colbuffer,
+        rowbuffer,
+        maxrank;
+        rowidcs=collect(1:length(sp1.pos)),
+        colidcs=collect(1:length(sp2.pos)),
+    )
+    return npivots, res.time
 end
 
-"""
-Overload for the GPU run in order to use CUDA's built-in timing functions which should separate compilation and run time.
-"""
-function run_aca(label, K::AbstractKernel, sp1, sp2, aca; maxrank=40)
-    println(label)
-    rowbuffer = zeros(Float64, maxrank, length(sp2.pos))
-    colbuffer = zeros(Float64, length(sp1.pos), maxrank)
-    CUDA.@time npivots = aca(K, rowbuffer, colbuffer, maxrank)
-    println("Pivots: ", npivots)
-    return npivots, rowbuffer, colbuffer
+# ── GPU helper ────────────────────────────────────────────────────────────
+
+function run_aca_gpu(assembler, test_ids, trial_ids; tol=1e-4, maxrank=40)
+    res = CUDA.@timed begin
+        npivots, U, V = ACACUDAExt.compress_block_gpu(assembler, test_ids, trial_ids)
+        npivots
+    end
+    return res.value, res.time
 end
 
-"""
-We create multiple mesh pairs to see the scaling behaviour. Benchmarking against a CPU is not valuable in and of itself but comparing GPU vs CPU scaling behaviour could be interesting.
-"""
-problem_sizes = []
-runtimes_cpu = []
-runtimes_gpu = []
-N_TESTS = 30
+# ── Benchmark loop ────────────────────────────────────────────────────────
+
+problem_sizes = Int[]
+cpu_times = Float64[]
+gpu_times = Float64[]
+
+N_TESTS = 10
+
+ext = Base.get_extension(AdaptiveCrossApproximation, :ACACUDAExt)
+if ext === nothing
+    error("ACACUDAExt not available. This benchmark requires BEAST + CUDA.")
+end
+
 for i in 1:N_TESTS
-    m1 = meshsphere(; radius=0.5, h=0.5 * (N_TESTS / i))
-    m2 = translate(m1, [0.0, 2.0, 0.0])
-    println("Block size 1: ", numcells(m1_1) * numcells(m2_1))
-
-    println("Iteration with problem size ", numcells(m1) * numcells(m2), "...")
-    problem_sizes.push(numcells(m1) * numcells(m2))
+    h = 0.5 / i  # finer mesh as i increases
+    m1 = meshsphere(; radius=0.5, h=max(h, 0.02))
+    m2 = translate(m1, SVector(2.0, 0.0, 0.0))
 
     op = Helmholtz3D.singlelayer()
     sp1 = lagrangec0d1(m1)
     sp2 = lagrangec0d1(m2)
 
-    aca = ACA(
-        AdaptiveCrossApproximation.MaximumValue(),
-        AdaptiveCrossApproximation.MaximumValue(),
-        AdaptiveCrossApproximation.FNormEstimator(0.0),
+    n = length(sp1.pos) * length(sp2.pos)
+    push!(problem_sizes, n)
+    println(
+        "\nIteration $i: block size = $(length(sp1.pos))×$(length(sp2.pos)) = $n elements"
     )
 
-    println("\nCPU/GPU comparison (for spherical mesh)")
-    K_cpu = AbstractKernel(op, sp1, sp2)
-    res = CUDA.@timed run_aca("CPU run", K_cpu, sp1, sp2, aca)
-    runtimes_cpu.push(res.time)
-    cpu_npivots, cpu_rowbuffer, cpu_colbuffer = res.value
-    K_gpu = AbstractKernelGPU(op, sp1, sp2)
-    res = CUDA.@timed run_aca("GPU run", K_gpu, sp1, sp2, aca)
-    runtimes_gpu.push(res.time)
-    gpu_npivots, gpu_rowbuffer, gpu_colbuffer = res.value
+    # CPU run
+    cpu_npivots, cpu_time = run_aca_cpu(op, sp1, sp2)
+    push!(cpu_times, cpu_time)
+    println("  CPU: $(round(cpu_time; digits=3))s, pivots=$cpu_npivots")
 
-    row_max_diff = maximum(abs.(cpu_rowbuffer - gpu_rowbuffer))
-    row_same = isapprox(cpu_rowbuffer, gpu_rowbuffer; rtol=1e-6, atol=1e-6)
-    column_same = isapprox(cpu_rowbuffer, gpu_rowbuffer; rtol=1e-6, atol=1e-6)
-    pivots_same = cpu_npivots == gpu_npivots
+    # GPU run
+    assembler = ext.GPUBlockAssembler(op, sp1, sp2; tol=1e-4, maxrank=40)
+    test_ids = collect(1:length(sp1.pos))
+    trial_ids = collect(1:length(sp2.pos))
+    gpu_npivots, gpu_time = run_aca_gpu(assembler, test_ids, trial_ids)
+    push!(gpu_times, gpu_time)
+    println("  GPU: $(round(gpu_time; digits=3))s, pivots=$gpu_npivots")
+    println("  Speedup: $(round(cpu_time / gpu_time; digits=1))×")
+end
 
-    println("CPU/GPU match: pivots=", pivots_same, " buffer=", row_same, column_same)
-    println("Max abs diff: ", row_max_diff)
+println("\n=== Summary ===")
+for (i, sz) in enumerate(problem_sizes)
+    println(
+        "Size $sz: CPU=$(round(cpu_times[i]; digits=3))s  GPU=$(round(gpu_times[i]; digits=3))s  Speedup=$(round(cpu_times[i]/gpu_times[i]; digits=1))×",
+    )
 end

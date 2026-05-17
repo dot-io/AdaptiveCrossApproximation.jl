@@ -9,13 +9,15 @@ function AbstractKernel(
     testspace::BEAST.Space,
     trialspace::BEAST.Space;
     quadstrat=BEAST.defaultquadstrat(operator, testspace, trialspace),
-    gpu=false
+    gpu=false,
 )
-    ext = Base.get_extension(AdaptiveCrossApproximation, :ACACUDAExt)
-    if ext !== nothing && gpu
-        return ext._make_kernel(
-            operator, testspace, trialspace; quadstrat=quadstrat
-        )
+    if gpu
+        ext = Base.get_extension(AdaptiveCrossApproximation, :ACACUDAExt)
+        if ext !== nothing
+            return ext.GPUBlockAssembler(operator, testspace, trialspace)
+        else
+            @warn "CUDA extension not available; falling back to CPU assembly."
+        end
     end
     assembler = BEAST.blockassembler(operator, testspace, trialspace; quadstrat=quadstrat)
     return AbstractKernel{scalartype(operator),typeof(assembler)}(assembler)

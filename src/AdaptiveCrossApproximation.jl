@@ -88,6 +88,9 @@ include("pivoting/filldistance.jl")
 include("pivoting/mimicrypivoting.jl")
 include("pivoting/treemimicrypivoting.jl")
 
+include("pivoting/batched/abstractbatchedpivoting.jl")
+include("pivoting/batched/batchedfilldistance.jl")
+
 include("convergence/estimation.jl")
 include("convergence/extrapolation.jl")
 include("convergence/randomsampling.jl")
@@ -101,6 +104,7 @@ nextrc!(buf, A::AbstractArray, i, j) = (buf .= view(A, i, j))
 include("aca.jl")
 #include("acaT.jl")
 include("iaca.jl")
+include("batched_aca.jl")
 
 if !isdefined(Base, :get_extension) # for julia version < 1.9
     include("../ext/ACAH2Trees/ACAH2Trees.jl")
@@ -177,8 +181,10 @@ export H
 export HMatrix
 export ACA
 export IACA
+export BatchedACA
 export FNormEstimator, iFNormEstimator, FNormExtrapolator
 export MaximumValue, Leja2, FillDistance
+export BatchedFillDistance
 export MimicryPivoting, TreeMimicryPivoting
 export reset!
 export AbstractKernelMatrix
