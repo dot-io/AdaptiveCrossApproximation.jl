@@ -105,11 +105,7 @@ end
 """
     _assemble_block_gpu(assembler, test_ids, trial_ids)
 
-Convenience fn
-Assemble a dense sub-block on GPU using BEAST's CUDA assembler.
-
-Uses `assembleblock_body_gpu!` with the pre-computed primer context.
-The block is assembled into a CuMatrix via CuMatrixStore.
+keeping this in if i still want to benchmark "naive dense assembly"
 """
 function _assemble_block_gpu(
     assembler::GPUBlockAssembler{K}, test_ids::Vector{Int}, trial_ids::Vector{Int}
@@ -137,6 +133,54 @@ function _assemble_block_gpu(
 end
 
 """
+    _assemble_rows_gpu!(dest, assembler, test_ids_selected, trial_ids)
+"""
+function _assemble_rows_gpu!(
+    dest::CuMatrix{K},
+    assembler::GPUBlockAssembler{K},
+    test_ids_selected::AbstractVector{<:Integer},
+    trial_ids::AbstractVector{<:Integer},
+) where {K}
+    BEASTCUDAExt = _beast_cuda_ext()
+    store = BEASTCUDAExt.CuMatrixStore(dest)
+    BEASTCUDAExt.assembleblock_body_gpu!(
+        assembler.biop,
+        assembler.tfs,
+        collect(Int, test_ids_selected),
+        assembler.bfs,
+        collect(Int, trial_ids),
+        assembler.ctx,
+        store;
+        kernel=assembler.kernel,
+    )
+    return dest
+end
+
+"""
+    _assemble_cols_gpu!(dest, assembler, test_ids, trial_ids_selected)
+"""
+function _assemble_cols_gpu!(
+    dest::CuMatrix{K},
+    assembler::GPUBlockAssembler{K},
+    test_ids::AbstractVector{<:Integer},
+    trial_ids_selected::AbstractVector{<:Integer},
+) where {K}
+    BEASTCUDAExt = _beast_cuda_ext()
+    store = BEASTCUDAExt.CuMatrixStore(dest)
+    BEASTCUDAExt.assembleblock_body_gpu!(
+        assembler.biop,
+        assembler.tfs,
+        collect(Int, test_ids),
+        assembler.bfs,
+        collect(Int, trial_ids_selected),
+        assembler.ctx,
+        store;
+        kernel=assembler.kernel,
+    )
+    return dest
+end
+
+"""
     compress_block_gpu(assembler, test_ids, trial_ids; rowpivoting, columnpivoting)
 """
 function compress_block_gpu(
@@ -149,8 +193,6 @@ function compress_block_gpu(
     m = length(test_ids)
     n = length(trial_ids)
 
-    block = _assemble_block_gpu(assembler, test_ids, trial_ids)
-
     U_buf = _acquire_buffer!(assembler.buffer_pool, K, m, assembler.maxrank)
     V_buf = _acquire_buffer!(assembler.buffer_pool, K, assembler.maxrank, n)
 
@@ -158,7 +200,7 @@ function compress_block_gpu(
     colpiv_fun = columnpivoting(trial_ids)
 
     npivots = aca_gpu!(
-        block,
+        assembler,
         U_buf,
         V_buf,
         test_ids,

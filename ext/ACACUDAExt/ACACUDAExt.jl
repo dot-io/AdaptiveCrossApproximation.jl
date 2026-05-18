@@ -9,6 +9,7 @@ using AdaptiveCrossApproximation:
     FNormEstimator,
     BatchedPivStrat,
     BatchedPivStratFunctor,
+    BatchedFillDistance,
     batchsize,
     reset!,
     tolerance
@@ -20,8 +21,9 @@ using LinearAlgebra
 using BEAST: BEAST
 using CUDA: CUDA
 
-include("aca_gpu.jl")
 include("assembly_gpu.jl")
+include("aca_gpu.jl")
+include("gpu_compressor.jl")
 
 function __init__()
     if CUDA.functional()

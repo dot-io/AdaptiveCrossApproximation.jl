@@ -1,9 +1,9 @@
 """
-    aca_gpu!(A, U, V, rowidcs, colidcs, maxrank;
+    aca_gpu!(assembler, U, V, rowidcs, colidcs, maxrank;
              rowpivoting, columnpivoting, tol)
 """
 function aca_gpu!(
-    A::CuMatrix{K},
+    assembler::GPUBlockAssembler{K},
     U::CuMatrix{K},
     V::CuMatrix{K},
     rowidcs::AbstractVector{Int},
@@ -15,7 +15,6 @@ function aca_gpu!(
 ) where {K<:Number}
     m = length(rowidcs)
     n = length(colidcs)
-    @assert size(A) == (m, n)
     @assert size(U, 1) == m && size(U, 2) >= maxrank
     @assert size(V, 1) >= maxrank && size(V, 2) == n
 
@@ -41,11 +40,16 @@ function aca_gpu!(
     fill!(U, zero(K))
     fill!(V, zero(K))
 
-    row_resid = CUDA.zeros(K, b_max, n)
-    col_resid = CUDA.zeros(K, m, b_max)
     U_I_buf = CUDA.zeros(K, b_max, maxrank)
     V_J_buf = CUDA.zeros(K, maxrank, b_max)
     R_IJ_buf = CUDA.zeros(K, b_max, b_max)
+
+    # F-norm update scratch: per-pivot dot products with all earlier pivots
+    # are computed as two single GEMVs instead of 2·(p-1) CUBLAS.dot calls,
+    # which is the difference between O(maxrank²) and O(maxrank) host syncs.
+    ucdots_buf = CUDA.zeros(K, maxrank)
+    vrdots_buf = CUDA.zeros(K, maxrank)
+    vrow_conj_buf = K <: Complex ? CUDA.zeros(K, n) : nothing
 
     npivot = 0
     normUV = zero(real(K))
@@ -62,11 +66,13 @@ function aca_gpu!(
         I_local = I_local[1:b]
         J_local = J_local[1:b]
 
-        row_view = view(row_resid, 1:b, 1:n)
-        col_view = view(col_resid, 1:m, 1:b)
-
-        _gather_rows!(row_view, A, I_local)
-        _gather_cols!(col_view, A, J_local)
+        # i accidentally assembled entire block here
+        selected_test  = [Int(rowidcs[i]) for i in I_local]
+        selected_trial = [Int(colidcs[j]) for j in J_local]
+        row_view = CUDA.zeros(K, b, n)
+        col_view = CUDA.zeros(K, m, b)
+        _assemble_rows_gpu!(row_view, assembler, selected_test, colidcs)
+        _assemble_cols_gpu!(col_view, assembler, rowidcs, selected_trial)
 
         if npivot > 0
             UI_view = view(U_I_buf, 1:b, 1:npivot)
@@ -95,10 +101,6 @@ function aca_gpu!(
         end
 
         k_trunc = findfirst(s -> s <= tol * sigma_1, sigma)
-
-        #TODO remove logging
-        @show b, k_trunc
-
         k_trunc = k_trunc === nothing ? length(sigma) : k_trunc - 1
         k_trunc = max(k_trunc, 1)
         k_trunc = min(k_trunc, maxrank - npivot)
@@ -126,10 +128,29 @@ function aca_gpu!(
             cnorm = CUBLAS.nrm2(v_row)
             if !isapprox(rnorm, zero(real(K))) && !isapprox(cnorm, zero(real(K)))
                 normUV += (rnorm * cnorm)^2
-                for j in 1:(p - 1)
-                    cdot = _cublas_dot(u_col, view(U, 1:m, j))
-                    rdot = _cublas_dot(v_row, view(V, j, 1:n))
-                    normUV += 2 * real(cdot * rdot)
+                if p > 1
+                    # 2 gemv more efficient than the many dots from before i think
+                    U_prev = view(U, 1:m, 1:(p - 1))
+                    V_prev = view(V, 1:(p - 1), 1:n)
+                    ucdots = view(ucdots_buf, 1:(p - 1))
+                    vrdots = view(vrdots_buf, 1:(p - 1))
+
+                    # ucdots = U_prev† * u_p
+                    CUBLAS.gemv!('C', one(K), U_prev, u_col, zero(K), ucdots)
+
+                    # vrdots[j]  = V_prev * (v_p)†
+                    # maybe dont have to allocate vrow_conj_buf and just do inplace?
+                    # but is conj transpose so wrong dims
+                    if K <: Complex
+                        vrow_conj = view(vrow_conj_buf, 1:n)
+                        vrow_conj .= conj.(v_row)
+                        CUBLAS.gemv!('N', one(K), V_prev, vrow_conj, zero(K), vrdots)
+                    else
+                        CUBLAS.gemv!('N', one(K), V_prev, v_row, zero(K), vrdots)
+                    end
+
+                    cross = 2 * real(sum(ucdots .* vrdots)) #crossterm justlike in aca
+                    normUV += cross
                 end
             end
             batch_contribution += abs2(sigma[i])
@@ -137,7 +158,7 @@ function aca_gpu!(
 
         npivot += k_trunc
 
-        if normUV > zero(real(K))
+        if normUV > zero(real(K)) # how can i move it on-device
             converged = sqrt(batch_contribution) <= tol * sqrt(normUV)
         end
     end
