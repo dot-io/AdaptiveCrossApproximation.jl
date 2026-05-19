@@ -57,8 +57,6 @@ function run_block_cpu(op, X1, X2)
     return aca(K, colbuffer, rowbuffer, MAXRANK; rowidcs=test_ids, colidcs=trial_ids)
 end
 
-# ── GPU block assembly + ACA (BatchedFillDistance pivoting) ──────────────────
-
 function run_block_gpu(assembler, X1, X2; batchsize::Int)
     ext       = Base.get_extension(AdaptiveCrossApproximation, :ACACUDAExt)
     test_ids  = collect(1:length(X1))
@@ -115,7 +113,9 @@ function run_benchmarks()
         )
 
         for bs in BATCH_SIZES
-            label = "GPU batchsize=$(bs)"
+            for backend in (:cpu, :cusolver)
+                for fnorm_iter in (true, false)
+            label = "GPU batchsize=$(bs), svd backend $backend, 1 by 1 fnorm iteration $fnorm_iter"
 
             print("  $(label) warmup ... ")
             run_block_gpu(assembler, X1, X2; batchsize=bs)
@@ -144,6 +144,8 @@ function run_benchmarks()
                 results, BenchResult(m, block_size, bs, μ_gpu, ci_gpu, speedup, speedup_ci)
             )
         end
+    end
+    end
     end
 
     return results
@@ -199,3 +201,4 @@ end
 
 results = run_benchmarks()
 fig     = plot_results(results; output=joinpath(@__DIR__, "bench_gpu_threshold.png"))
+gpu_threshold.png"))
