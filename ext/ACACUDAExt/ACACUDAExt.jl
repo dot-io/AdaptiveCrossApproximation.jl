@@ -11,6 +11,7 @@ using AdaptiveCrossApproximation:
     BatchedPivStratFunctor,
     BatchedFillDistance,
     batchsize,
+    nextrc!,
     reset!,
     tolerance
 
@@ -20,6 +21,7 @@ using CUDA.CUBLAS
 using LinearAlgebra
 using BEAST: BEAST
 using CUDA: CUDA
+using CUDA.CUSOLVER
 
 include("assembly_gpu.jl")
 include("aca_gpu.jl")
