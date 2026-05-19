@@ -9,6 +9,9 @@ struct GPUCompressor{K,Op,TS,BS,RP,CP}
     rowpivoting::RP
     columnpivoting::CP
     tol::Float64
+    svd_compression::Bool
+    fnorm_iteration::Bool
+    svd_backend::Symbol
 end
 
 Base.eltype(::GPUCompressor{K}) where {K} = K
@@ -31,6 +34,9 @@ function GPUCompressor(
     kernel::Symbol=:pair_scatter,
     rowpivoting=nothing,
     columnpivoting=nothing,
+    svd_compression::Bool=false,
+    fnorm_iteration::Bool=false,
+    svd_backend::Symbol=:cusolver,
 )
     assembler = GPUBlockAssembler(
         op, testspace, trialspace; kernel=kernel, maxrank=maxrank, tol=Float64(tol)
@@ -43,7 +49,8 @@ function GPUCompressor(
         eltype(assembler),typeof(op),typeof(testspace),typeof(trialspace),
         typeof(rpiv),typeof(cpiv),
     }(
-        op, testspace, trialspace, assembler, rpiv, cpiv, Float64(tol)
+        op, testspace, trialspace, assembler, rpiv, cpiv, Float64(tol),
+        svd_compression, fnorm_iteration, svd_backend,
     )
 end
 
@@ -70,6 +77,9 @@ function (gc::GPUCompressor{K})(
         trial_ids;
         rowpivoting=gc.rowpivoting,
         columnpivoting=gc.columnpivoting,
+        svd_compression=gc.svd_compression,
+        fnorm_iteration=gc.fnorm_iteration,
+        svd_backend=gc.svd_backend,
     )
     m = length(test_ids)
     n = length(trial_ids)
