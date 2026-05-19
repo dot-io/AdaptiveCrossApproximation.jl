@@ -133,55 +133,43 @@ function _assemble_block_gpu(
 end
 
 """
-    _assemble_rows_gpu!(dest, assembler, test_ids_selected, trial_ids)
+    nextrc!(dest, A::GPUBlockAssembler, i, j)
+
+GPU counterpart of the kernel-matrix `nextrc!` interface used by the CPU
+ACA driver. Assembles the sub-block `A[i, j]` directly into `dest` on the
+device. `i` and `j` are global DOF id vectors. Used by `aca_gpu!` to pull
+exactly the rows and columns the pivoting strategy requests, one outer
+iteration at a time.
 """
-function _assemble_rows_gpu!(
+function AdaptiveCrossApproximation.nextrc!(
     dest::CuMatrix{K},
-    assembler::GPUBlockAssembler{K},
-    test_ids_selected::AbstractVector{<:Integer},
-    trial_ids::AbstractVector{<:Integer},
+    A::GPUBlockAssembler{K},
+    i::AbstractVector{<:Integer},
+    j::AbstractVector{<:Integer},
 ) where {K}
     BEASTCUDAExt = _beast_cuda_ext()
     store = BEASTCUDAExt.CuMatrixStore(dest)
     BEASTCUDAExt.assembleblock_body_gpu!(
-        assembler.biop,
-        assembler.tfs,
-        collect(Int, test_ids_selected),
-        assembler.bfs,
-        collect(Int, trial_ids),
-        assembler.ctx,
+        A.biop,
+        A.tfs,
+        collect(Int, i),
+        A.bfs,
+        collect(Int, j),
+        A.ctx,
         store;
-        kernel=assembler.kernel,
+        kernel=A.kernel,
     )
     return dest
 end
 
 """
-    _assemble_cols_gpu!(dest, assembler, test_ids, trial_ids_selected)
-"""
-function _assemble_cols_gpu!(
-    dest::CuMatrix{K},
-    assembler::GPUBlockAssembler{K},
-    test_ids::AbstractVector{<:Integer},
-    trial_ids_selected::AbstractVector{<:Integer},
-) where {K}
-    BEASTCUDAExt = _beast_cuda_ext()
-    store = BEASTCUDAExt.CuMatrixStore(dest)
-    BEASTCUDAExt.assembleblock_body_gpu!(
-        assembler.biop,
-        assembler.tfs,
-        collect(Int, test_ids),
-        assembler.bfs,
-        collect(Int, trial_ids_selected),
-        assembler.ctx,
-        store;
-        kernel=assembler.kernel,
-    )
-    return dest
-end
+    compress_block_gpu(assembler, test_ids, trial_ids;
+                       rowpivoting, columnpivoting,
+                       svd_compression=false, fnorm_iteration=false,
+                       svd_backend=:cusolver)
 
-"""
-    compress_block_gpu(assembler, test_ids, trial_ids; rowpivoting, columnpivoting)
+Forwards `svd_compression`, `fnorm_iteration`, and `svd_backend` to
+`aca_gpu!` — see that function's docstring for what they do.
 """
 function compress_block_gpu(
     assembler::GPUBlockAssembler{K},
@@ -189,6 +177,9 @@ function compress_block_gpu(
     trial_ids::Vector{Int};
     rowpivoting,
     columnpivoting,
+    svd_compression::Bool=false,
+    fnorm_iteration::Bool=false,
+    svd_backend::Symbol=:cusolver,
 ) where {K}
     m = length(test_ids)
     n = length(trial_ids)
@@ -209,6 +200,9 @@ function compress_block_gpu(
         rowpivoting=rowpiv_fun,
         columnpivoting=colpiv_fun,
         tol=assembler.tol,
+        svd_compression=svd_compression,
+        fnorm_iteration=fnorm_iteration,
+        svd_backend=svd_backend,
     )
 
     U = CuMatrix{K}(undef, m, npivots)
