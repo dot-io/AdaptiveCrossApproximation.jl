@@ -205,26 +205,23 @@ function plot_bench(data; output_dir=OUTPUT_DIR, fname="bench.png")
             end
         end
 
-        # CPU baseline on the error and rank panels (dashed gray).
-        cpu_op = sort(filter(d -> d.op == op, cpu_recs); by=d -> d.n)
-        if !isempty(cpu_op)
+        cpu_op_all = filter(d -> d.op == op, cpu_recs)
+        if !isempty(cpu_op_all)
+            ns = sort(unique(c.n for c in cpu_op_all))
+            agg = (field) -> [
+                median(getproperty(c, field) for c in cpu_op_all if c.n == nv) for nv in ns
+            ]
             lines!(
-                ax_er,
-                [c.n for c in cpu_op],
-                [c.err for c in cpu_op];
-                color=:gray,
-                linestyle=:dash,
-                linewidth=1.2,
-                label="CPU ACA",
+                ax_er, ns, agg(:err);
+                color=:gray, linestyle=:dash, linewidth=1.2, label="CPU ACA",
             )
-            if all(c -> hasproperty(c, :max_rank), cpu_op)
-                xs_c = [c.n for c in cpu_op]
+            if all(c -> hasproperty(c, :max_rank), cpu_op_all)
                 lines!(
-                    ax_rk, xs_c, [c.max_rank for c in cpu_op];
+                    ax_rk, ns, agg(:max_rank);
                     color=:gray, linewidth=1.5, label="CPU ACA",
                 )
                 lines!(
-                    ax_rk, xs_c, [c.mean_rank for c in cpu_op];
+                    ax_rk, ns, agg(:mean_rank);
                     color=:gray, linestyle=:dash, linewidth=1.0,
                 )
             end
