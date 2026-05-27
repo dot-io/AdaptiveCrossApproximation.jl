@@ -47,10 +47,10 @@ end
         cuboid_far = translate(cuboid, FARFIELD_OFFSET)
 
         # Coverage targets:
-        # 1. Low wavenumber on smooth surface with piecewise constant basis
-        # 2. High wavenumber on smooth surface with piecewise constant basis
-        # 3. High wavenumber on surface with discontinuities
-        # 4. Maxwell operator on smooth surface
+        # 1 low wavenumber, smooth mesh, linear lagrange bfs 
+        # 2 high wavenumber, smooth mesh, linear lagrange bfs 
+        # 3 high wavenumber, discontinuous mesh, linear lagrange bfs
+        # 4 Maxwell/Raviart-Thomas on smooth mesh 
         append!(
             ProblemList,
             [

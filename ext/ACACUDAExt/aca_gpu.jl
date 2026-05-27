@@ -9,11 +9,16 @@
   whose singular values in the SVD is near-zero: this SHOULD improve numerical
   accuracy but remains to be tested
 
-  - `fnorm_iteration::Bool` (default `false`): if this is set to `true`, instead
-  of adding an entire batch to U and V factors at once, the convergence criterion
-  will be checked for each separate row an column, starting from the pair with
-  the largest singular value. This prevents the batched implementation from
-  overestimating the rank.
+  - `fnorm_iteration::Bool` (default `false`): controls the F-norm accumulator
+  used by the per-batch convergence check.
+    - `false`: cheap host-side accumulator — ‖UV‖_F² ≈ Σ_batches ‖R_IJ‖_F²
+      (sum of squared SVD singular values from each batch's intersection).
+      No extra kernel launches.
+    - `true`: per-pivot accumulator including cross-terms between previous
+      pivots and the new one (two GEMVs per pivot). More accurate but O(p)
+      device work per pivot.
+    In both cases, convergence is tested after every batch via
+    `sqrt(‖R_IJ‖_F²) ≤ tol · sqrt(normUV²)`.
 
   - `svd_backend::Symbol` (default `:cusolver`)
   """
@@ -124,11 +129,10 @@ function aca_gpu!(
             Usvd_k = CuMatrix{K}(U_s)    # already on device
             Vsvd_k = CuMatrix{K}(V_s)
         else
-            G = Array(R_IJ_view)
-            svd!(G)
-            sigma_h = G.S
-            Usvd_k = CuMatrix{K}(G.U)    # tfr back to device
-            Vsvd_k = CuMatrix{K}(G.V)
+            F = svd!(Array(R_IJ_view))
+            sigma_h = F.S
+            Usvd_k = CuMatrix{K}(F.U)    # tfr back to device
+            Vsvd_k = CuMatrix{K}(F.V)
         end
 
         sigma_1 = sigma_h[1]
@@ -136,15 +140,40 @@ function aca_gpu!(
             break
         end
 
-        # Rank per batch: opt-in truncation or keep all b.
-        k_trunc = if svd_compression
-            kk = findfirst(s -> s <= tol * sigma_1, sigma_h)
-            kk = kk === nothing ? length(sigma_h) : kk - 1
-            max(kk, 1)
-        else
-            length(sigma_h)
+        # In-batch per-pivot trimming. Accept σ_i while it contributes
+        # meaningfully to the running ‖UV‖_F² estimate; otherwise stop. This
+        # is the batched analogue of the CPU FNormEstimator's per-pivot check
+        # and is what prevents the GPU path from over-compressing small
+        # blocks — without it the first batch always commits all `batchsize`
+        # pivots, even when only 3–5 are needed.
+        k_trunc = 0
+        running = normUV
+        per_pivot_fired = false
+        @inbounds for i in 1:length(sigma_h)
+            if running > zero(real(K)) && abs2(sigma_h[i]) <= tol^2 * running
+                per_pivot_fired = true
+                break
+            end
+            k_trunc += 1
+            running += abs2(sigma_h[i])
         end
+
+        # Optional stricter cut against the largest singular value of *this*
+        # batch's intersection. Kept for backward compatibility; the per-pivot
+        # trim above already subsumes it on the very first batch.
+        if svd_compression && k_trunc > 0
+            kk = findfirst(s -> s <= tol * sigma_1, view(sigma_h, 1:k_trunc))
+            if kk !== nothing
+                k_trunc = max(kk - 1, 1)
+                per_pivot_fired = true
+            end
+        end
+
         k_trunc = min(k_trunc, maxrank - npivot)
+        if k_trunc == 0
+            converged = true
+            break
+        end
 
         sqrt_sigma_inv = CuArray(K.([one(real(K)) / sqrt(sigma_h[i]) for i in 1:k_trunc]))
 
@@ -160,9 +189,15 @@ function aca_gpu!(
         )
         V_target .*= reshape(sqrt_sigma_inv, k_trunc, 1)
 
-        # F-norm update + convergence: optional, expensive (O(maxrank²) syncs).
+        # Per-batch F-norm of the intersection residual: cheap, host-side, free
+        # from the SVD we already ran. ‖R_IJ‖_F² = Σ σ_i².
+        batch_contribution = zero(real(K))
+        @inbounds for i in 1:k_trunc
+            batch_contribution += abs2(sigma_h[i])
+        end
+
         if fnorm_iteration
-            batch_contribution = zero(real(K))
+            # Per-pivot F-norm with cross-terms (expensive: O(p) GEMVs per pivot).
             @inbounds for i in 1:k_trunc
                 p = npivot + i
                 u_col = view(U, 1:m, p)
@@ -190,16 +225,19 @@ function aca_gpu!(
                         normUV += 2 * real(sum(ucdots .* vrdots))
                     end
                 end
-                batch_contribution += abs2(sigma_h[i])
-            end
-
-            npivot += k_trunc
-
-            if normUV > zero(real(K))
-                converged = sqrt(batch_contribution) <= tol * sqrt(normUV)
             end
         else
-            npivot += k_trunc
+            # Cheap per-batch accumulator: no kernel launches, no syncs.
+            # Treats batches as orthogonal contributions to ‖UV‖_F².
+            normUV += batch_contribution
+        end
+
+        npivot += k_trunc
+
+        if per_pivot_fired
+            converged = true
+        elseif normUV > zero(real(K))
+            converged = sqrt(batch_contribution) <= tol * sqrt(normUV)
         end
     end
 

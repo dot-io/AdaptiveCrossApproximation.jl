@@ -46,7 +46,12 @@ function (convcrit::FNormEstimatorFunctor{F})(
         (npivot == 1) ? (return npivot - 1, true) : (return npivot - 1, false)
     end
     normF!(convcrit, rowbuffer, colbuffer, npivot, maxrows, maxcolumns)
-    return npivot, rnorm * cnorm > convcrit.tol * sqrt(convcrit.normUV²)
+    # `normUV²` is accumulated via incremental updates with signed cross terms;
+    # for highly-correlated pivots (e.g. smooth far-field blocks) the positive
+    # ‖row‖²‖col‖² contribution can be almost fully cancelled, leaving roundoff
+    # of order ‑1e‑20. Clamp to zero before sqrt.
+    normF² = max(convcrit.normUV², zero(F))
+    return npivot, rnorm * cnorm > convcrit.tol * sqrt(normF²)
 end
 
 """

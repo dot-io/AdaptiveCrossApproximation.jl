@@ -16,6 +16,9 @@ using AdaptiveCrossApproximation
     include("test_acabeast.jl")
 
     include("test_hmatrix.jl")
+
+    include("gpu/test_cuda_ext.jl")
+    include("gpu/test_hmatrix_gpu.jl")
 end
 
 @testitem "Code quality (Aqua.jl)" begin

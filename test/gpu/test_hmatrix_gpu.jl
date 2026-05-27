@@ -2,7 +2,7 @@ using Test
 using CUDA
 using LinearAlgebra
 using StaticArrays: SVector
-using BEAST: Helmholtz3D, lagrangec0d1, scalartype
+using BEAST: Helmholtz3D, lagrangec0d1, scalartype, Maxwell3D, raviartthomas
 using CompScienceMeshes: meshsphere, translate
 using H2Trees
 using OhMyThreads: SerialScheduler
@@ -21,8 +21,8 @@ using AdaptiveCrossApproximation
 
     res = 0.3
     sphere = meshsphere(1.0, res)
-    op = Helmholtz3D.singlelayer(; wavenumber=1.0)
-    X = lagrangec0d1(sphere)
+    op = Maxwell3D.singlelayer(; wavenumber=1.0)
+    X = raviartthomas(sphere)
 
     T = scalartype(op)
     m = length(X)
