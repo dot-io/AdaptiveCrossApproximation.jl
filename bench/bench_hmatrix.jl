@@ -95,7 +95,7 @@ function cluster_for(category, kernel, batchsize, k, svd_comp, fnorm_iter, block
 end
 
 function main(; output=joinpath(@__DIR__, "bench_hmatrix_results.jld"))
-    ext = Base.get_extension(AdaptiveCrossApproximation, :ACACUDAExt)
+    ext = Base.get_extension(AdaptiveCrossApproximation, :ACACUDA)
 
     results = []
     print("How many repeats should be run per benchmark: ")
