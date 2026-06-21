@@ -18,7 +18,7 @@ using H2Trees: TwoNTree
 
 include("plot_stats.jl")
 
-const GPU_KERNELS = (:pair_scatter, :gather_tile, :hybrid_global, :hybrid_shared, :sparse)
+const GPU_KERNELS = (:pair_scatter, :gather_tile, :hybrid_global, :hybrid_shared)
 const RESOLUTIONS = (0.4, 0.25, 0.13, 0.07)
 const TOL         = 1e-4
 const MAXRANK     = 40
@@ -122,126 +122,127 @@ function main(; output=joinpath(@__DIR__, "bench_hmatrix_results.jld"))
                 A_dense, A_norm = dense_reference(operator, X1, X2)
 
                 for block_size in block_size_sweep
-                tree = TwoNTree(
-                    X1.pos, X2.pos, 1 / 2^10;
-                    testminvalues=block_size, trialminvalues=block_size,
-                )
-
-                # ─── CPU baseline (FillDistance pivoting) ───
-                cpu_compressor = cpu_aca(X1, X2)
-                hmat_cpu = HMatrix(
-                    operator,
-                    X1,
-                    X2,
-                    tree;
-                    tol=TOL,
-                    maxrank=MAXRANK,
-                    compressor=cpu_compressor,
-                    spaceordering=PreserveSpaceOrder(),
-                    scheduler=SerialScheduler(),
-                )
-                cpu_err = relative_error(hmat_cpu, A_dense, A_norm)
-                cpu_rstats = rank_stats(hmat_cpu)
-                hmat_cpu = nothing
-
-                cpu_bench = @benchmark HMatrix(
-                    $operator,
-                    $X1,
-                    $X2,
-                    $tree;
-                    tol=$TOL,
-                    maxrank=$MAXRANK,
-                    compressor=$cpu_compressor,
-                    spaceordering=PreserveSpaceOrder(),
-                    scheduler=SerialScheduler(),
-                ) samples = n_repeats evals = 1
-                push!(
-                    results,
-                    (
-                        device          = :cpu,
-                        times           = cpu_bench.times,    # nanoseconds
-                        err             = cpu_err,
-                        n               = ndofs,
-                        h               = h,
-                        op              = op_sym,
-                        k               = k,
-                        kernel          = :none,
-                        batchsize       = 0,
-                        svd_compression = false,
-                        fnorm_iteration = false,
-                        block_size      = block_size,
-                        mean_rank       = cpu_rstats.mean_rank,
-                        max_rank        = cpu_rstats.max_rank,
-                        category        = category,
-                        cluster         = category === :block_size ? block_size : :cpu,
-                    ),
-                )
-
-                # ─── GPU variants ───
-                for kernel in kernels_sweep,
-                    batch_size in batches_sweep,
-                    svd_compression in svd_sweep,
-                    fnormiter in fnorm_sweep
-
-                    gpu_comp = ext.GPUCompressor(
-                        operator,
-                        X1,
-                        X2;
-                        tol=TOL,
-                        maxrank=MAXRANK,
-                        batchsize=batch_size,
-                        kernel=kernel,
-                        svd_compression=svd_compression,
-                        fnorm_iteration=fnormiter,
+                    tree = TwoNTree(
+                        X1.pos,
+                        X2.pos,
+                        1 / 2^10;
+                        testminvalues=block_size,
+                        trialminvalues=block_size,
                     )
 
-                    hmat_gpu = @sync HMatrix(
+                    cpu_compressor = cpu_aca(X1, X2)
+                    hmat_cpu = HMatrix(
                         operator,
                         X1,
                         X2,
                         tree;
                         tol=TOL,
                         maxrank=MAXRANK,
-                        compressor=gpu_comp,
+                        compressor=cpu_compressor,
                         spaceordering=PreserveSpaceOrder(),
                         scheduler=SerialScheduler(),
                     )
-                    gpu_err = relative_error(hmat_gpu, A_dense, A_norm)
-                    gpu_rstats = rank_stats(hmat_gpu)
-                    hmat_gpu = nothing
-                    gpu_bench = @benchmark HMatrix(
+                    cpu_err = relative_error(hmat_cpu, A_dense, A_norm)
+                    cpu_rstats = rank_stats(hmat_cpu)
+                    hmat_cpu = nothing
+
+                    cpu_bench = @benchmark HMatrix(
                         $operator,
                         $X1,
                         $X2,
                         $tree;
                         tol=$TOL,
                         maxrank=$MAXRANK,
-                        compressor=$gpu_comp,
+                        compressor=$cpu_compressor,
                         spaceordering=PreserveSpaceOrder(),
                         scheduler=SerialScheduler(),
                     ) samples = n_repeats evals = 1
                     push!(
                         results,
                         (
-                            device          = :gpu,
-                            times           = gpu_bench.times,
-                            err             = gpu_err,
+                            device          = :cpu,
+                            times           = cpu_bench.times,    # nanoseconds
+                            err             = cpu_err,
                             n               = ndofs,
                             h               = h,
                             op              = op_sym,
                             k               = k,
-                            kernel          = kernel,
-                            batchsize       = batch_size,
-                            svd_compression = svd_compression,
-                            fnorm_iteration = fnormiter,
+                            kernel          = :none,
+                            batchsize       = 0,
+                            svd_compression = false,
+                            fnorm_iteration = false,
                             block_size      = block_size,
-                            mean_rank       = gpu_rstats.mean_rank,
-                            max_rank        = gpu_rstats.max_rank,
+                            mean_rank       = cpu_rstats.mean_rank,
+                            max_rank        = cpu_rstats.max_rank,
                             category        = category,
-                            cluster         = cluster_for(category, kernel, batch_size, k, svd_compression, fnormiter, block_size),
+                            cluster         = category === :block_size ? block_size : :cpu,
                         ),
                     )
-                end
+
+                    for kernel in kernels_sweep,
+                        batch_size in batches_sweep,
+                        svd_compression in svd_sweep,
+                        fnormiter in fnorm_sweep
+
+                        gpu_comp = ext.GPUCompressor(
+                            operator,
+                            X1,
+                            X2;
+                            tol=TOL,
+                            maxrank=MAXRANK,
+                            batchsize=batch_size,
+                            kernel=kernel,
+                            svd_compression=svd_compression,
+                            fnorm_iteration=fnormiter,
+                        )
+
+                        hmat_gpu = @sync HMatrix(
+                            operator,
+                            X1,
+                            X2,
+                            tree;
+                            tol=TOL,
+                            maxrank=MAXRANK,
+                            compressor=gpu_comp,
+                            spaceordering=PreserveSpaceOrder(),
+                            scheduler=SerialScheduler(),
+                        )
+                        gpu_err = relative_error(hmat_gpu, A_dense, A_norm)
+                        gpu_rstats = rank_stats(hmat_gpu)
+                        hmat_gpu = nothing
+                        gpu_bench = @benchmark HMatrix(
+                            $operator,
+                            $X1,
+                            $X2,
+                            $tree;
+                            tol=$TOL,
+                            maxrank=$MAXRANK,
+                            compressor=$gpu_comp,
+                            spaceordering=PreserveSpaceOrder(),
+                            scheduler=SerialScheduler(),
+                        ) samples = n_repeats evals = 1
+                        push!(
+                            results,
+                            (
+                                device          = :gpu,
+                                times           = gpu_bench.times,
+                                err             = gpu_err,
+                                n               = ndofs,
+                                h               = h,
+                                op              = op_sym,
+                                k               = k,
+                                kernel          = kernel,
+                                batchsize       = batch_size,
+                                svd_compression = svd_compression,
+                                fnorm_iteration = fnormiter,
+                                block_size      = block_size,
+                                mean_rank       = gpu_rstats.mean_rank,
+                                max_rank        = gpu_rstats.max_rank,
+                                category        = category,
+                                cluster         = cluster_for(category, kernel, batch_size, k, svd_compression, fnormiter, block_size),
+                            ),
+                        )
+                    end
                 end  # block_size loop
             end
         end

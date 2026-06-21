@@ -13,13 +13,13 @@ using AdaptiveCrossApproximation
         @warn "CUDA not functional; skipping HMatrix GPU test."
         return nothing
     end
-    ext = Base.get_extension(AdaptiveCrossApproximation, :ACACUDAExt)
+    ext = Base.get_extension(AdaptiveCrossApproximation, :ACACUDA)
     if ext === nothing
-        @warn "ACACUDAExt not loaded; skipping HMatrix GPU test."
+        @warn "ACACUDA not loaded; skipping HMatrix GPU test."
         return nothing
     end
 
-    res = 0.3
+    res = 0.2
     sphere = meshsphere(1.0, res)
     op = Maxwell3D.singlelayer(; wavenumber=1.0)
     X = raviartthomas(sphere)
@@ -36,7 +36,7 @@ using AdaptiveCrossApproximation
     A_norm = norm(A_dense)
     @test A_norm > 0
 
-    tree = TwoNTree(X.pos, X.pos, 1 / 2^10; testminvalues=40, trialminvalues=40)
+    tree = TwoNTree(X.pos, X.pos, 1 / 2^10; testminvalues=128, trialminvalues=128)
     tol = 1e-4
     maxrank = 40
     ordering = AdaptiveCrossApproximation.PreserveSpaceOrder()
@@ -67,7 +67,7 @@ using AdaptiveCrossApproximation
     for bs in (1, 5)
         @testset "GPU HMatrix batchsize=$(bs)" begin
             gpu_comp = ext.GPUCompressor(
-                op, X, X; tol=tol, maxrank=maxrank, batchsize=bs, kernel=:pair_scatter
+                op, X, X; tol=tol, maxrank=maxrank, batchsize=bs, kernel=:hybrid_global
             )
 
             hmat_gpu = HMatrix(
@@ -83,7 +83,7 @@ using AdaptiveCrossApproximation
             )
 
             err_dense = norm(Matrix(hmat_gpu) - A_dense) / A_norm
-            @info "  GPU HMatrix bs=$bs vs dense rel_err = $(round(err_dense; digits=6))"
+            @info "  GPU HMatrix bs=$bs vs dense rel_err = $(round(err_dense; digits=12))"
             @test err_dense < 1e-2
 
             x = rand(T, m)
