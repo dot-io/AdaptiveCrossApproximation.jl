@@ -6,3 +6,8 @@
 /docs/build/
 lcov.info
 *.vscode
+
+# Ignore the changes to gitignore, it is to remove old tests and benchmarks from
+# future commits, but to keep them in storage just in case-N
+/legacy/
+batched_aca.txt

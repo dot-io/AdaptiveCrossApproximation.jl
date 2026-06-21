@@ -1,3 +1,5 @@
+# Keep only main public-facing docstrings, remove internal implementation details
+
 """
     FNormEstimator{F} <: ConvCrit
 
@@ -11,57 +13,25 @@ mutable struct FNormEstimator{F} <: ConvCrit
     tol::F
 end
 
-"""
-    FNormEstimatorFunctor{F} <: ConvCritFunctor
-
-Stateful Frobenius norm estimator for ACA compression.
-Tracks squared norm of UV factorization across iterations and stops iteration when relative error estimate falls below tolerance.
-
-# Fields
-
-  - `normUV²::F`: Accumulated squared Frobenius norm of UV
-  - `tol::F`: Relative tolerance threshold
-"""
 mutable struct FNormEstimatorFunctor{F} <: ConvCritFunctor
     normUV²::F
     tol::F
 end
 
-"""
-    (cc::FNormEstimator{F})()
-
-Initialize FNormEstimator functor with zero accumulated norm.
-"""
 function (cc::FNormEstimator{F})() where {F}
     return FNormEstimatorFunctor(F(0.0), cc.tol)
 end
 
-"""
-    tolerance(cc::FNormEstimator)
+_buildconvcrit(cc::FNormEstimator, A, rowidcs, colidcs, maxrank) = cc()
 
-Get tolerance threshold from estimator.
-"""
+function reset!(convcrit::FNormEstimatorFunctor)
+    convcrit.normUV² = zero(convcrit.normUV²)
+    return nothing
+end
+
 tolerance(cc::FNormEstimator) = cc.tol
+tolerance(cc::FNormEstimatorFunctor) = cc.tol
 
-"""
-    (convcrit::FNormEstimatorFunctor)(rowbuffer, colbuffer, npivot, maxrows, maxcolumns)
-
-Check convergence for standard ACA using Frobenius norm estimate.
-Returns (npivot, continue) where continue is true if iteration should proceed.
-
-# Arguments
-
-  - `rowbuffer::AbstractMatrix{K}`: Row factor buffer
-  - `colbuffer::AbstractMatrix{K}`: Column factor buffer
-  - `npivot::Int`: Current pivot index
-  - `maxrows::Int`: Number of active rows
-  - `maxcolumns::Int`: Number of active columns
-
-# Returns
-
-  - `npivot::Int`: Final pivot count
-  - `continue::Bool`: Whether to continue iteration
-"""
 function (convcrit::FNormEstimatorFunctor{F})(
     rowbuffer::AbstractMatrix{K},
     colbuffer::AbstractMatrix{K},
@@ -71,19 +41,23 @@ function (convcrit::FNormEstimatorFunctor{F})(
 ) where {F<:Real,K}
     @views rnorm = norm(rowbuffer[npivot, 1:maxcolumns])
     @views cnorm = norm(colbuffer[1:maxrows, npivot])
-
     (isapprox(rnorm, 0.0) && isapprox(cnorm, 0.0)) && (return npivot - 1, false)
     if (isapprox(rnorm, 0.0) || isapprox(cnorm, 0.0))
         (npivot == 1) ? (return npivot - 1, true) : (return npivot - 1, false)
     end
     normF!(convcrit, rowbuffer, colbuffer, npivot, maxrows, maxcolumns)
-    return npivot, rnorm * cnorm > convcrit.tol * sqrt(convcrit.normUV²)
+    # `normUV²` is accumulated via incremental updates with signed cross terms;
+    # for highly-correlated pivots (e.g. smooth far-field blocks) the positive
+    # ‖row‖²‖col‖² contribution can be almost fully cancelled, leaving roundoff
+    # of order ‑1e‑20. Clamp to zero before sqrt.
+    normF² = max(convcrit.normUV², zero(F))
+    return npivot, rnorm * cnorm > convcrit.tol * sqrt(normF²)
 end
 
 """
     iFNormEstimator{F} <: ConvCrit
 
-Frobenius norm-based convergence criterion for incomplete ACA (iACA).
+Frobenius norm-based convergence criterion for incomplete ACA (IACA).
 Uses moving average norm estimate for geometric pivoting scenarios.
 
 # Fields
@@ -94,54 +68,23 @@ mutable struct iFNormEstimator{F} <: ConvCrit
     tol::F
 end
 
-"""
-    iFNormEstimatorFunctor{F} <: ConvCritFunctor
-
-Stateful Frobenius norm estimator for iACA compression.
-Tracks moving average of row/column norms.
-
-# Fields
-
-  - `normUV::F`: Moving average norm
-  - `tol::F`: Relative tolerance threshold
-"""
 mutable struct iFNormEstimatorFunctor{F} <: ConvCritFunctor
     normUV::F
     tol::F
 end
 
-"""
-    (cc::iFNormEstimator{F})()
-
-Initialize iFNormEstimator functor with zero accumulated norm.
-"""
 function (cc::iFNormEstimator{F})() where {F}
     return iFNormEstimatorFunctor(F(0.0), cc.tol)
 end
 
-"""
-    tolerance(cc::iFNormEstimatorFunctor)
+function reset!(convcrit::iFNormEstimatorFunctor)
+    convcrit.normUV = zero(convcrit.normUV)
+    return nothing
+end
 
-Get tolerance threshold from iACA estimator functor.
-"""
 tolerance(cc::iFNormEstimatorFunctor) = cc.tol
+tolerance(cc::iFNormEstimator) = cc.tol
 
-"""
-    (convcrit::iFNormEstimatorFunctor)(rcbuffer::AbstractVector{K}, npivot::Int)
-
-Check convergence for iACA using moving average norm.
-Returns (npivot, continue) where continue is true if iteration should proceed.
-
-# Arguments
-
-  - `rcbuffer::AbstractVector{K}`: Current row or column buffer
-  - `npivot::Int`: Current pivot index
-
-# Returns
-
-  - `npivot::Int`: Final pivot count
-  - `continue::Bool`: Whether to continue iteration
-"""
 function (convcrit::iFNormEstimatorFunctor{F})(
     rcbuffer::AbstractVector{K}, npivot::Int
 ) where {F<:Real,K}

@@ -1,0 +1,15 @@
+Tests I ran last week:
+- instead of per row/column kernel launch, per-block precomputation
+--> this capped at around a 3.5x speedup, which corresponds to the profiler output of the CPU code I profiled last semester:
+    - here, about 75% of runtime was spent in momintegrals!(...)
+    Remembering Amdahl's law,
+    S = 1/(1 - P + P/S_P)
+    where P is the proportion of the program that can be parallelized, and S_P is the speedup of the parallelized portion.
+    3.5 = 1/(1 - 0.8 + 0.8/S_P)
+    1/4 = 1 - 0.8 + 0.8/S_P
+    0.25 = 0.20 + 0.0.8/S_P
+    0.05 = 0.8/S_P
+    S_P = 0.8/0.05 = 16, which can be realistic for a GPU.
+
+- So why was the per row/column computing kernel so slow? A large number of small kernels were being launched. I want to profile this via NVIDIA NSight but I believe these launches were unable to saturate the GPU and/or the launches were delayed due to too many concurrent launches, which then led to overhead and slowdown.
+Also I believe extra allocations were happening

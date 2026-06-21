@@ -1,39 +1,54 @@
 using AdaptiveCrossApproximation
+using H2Trees
 using LinearAlgebra
-using StaticArrays
 using Random
+using StaticArrays
 using Test
-##
-Random.seed!(1)
-pts1 = [@SVector rand(3) for i in 1:100]
-pts2 = [@SVector rand(3) for i in 1:110] .+ Scalar(SVector(4.0, 0.0, 0.0))
-K = [1 / (norm(pj - pk)) for pj in pts1, pk in pts2]
 
-iaca = AdaptiveCrossApproximation.iACA(
-    AdaptiveCrossApproximation.MimicryPivoting(pts2, pts1),
-    AdaptiveCrossApproximation.MaximumValue(),
-    AdaptiveCrossApproximation.FNormExtrapolator(
-        AdaptiveCrossApproximation.iFNormEstimator(1e-4)
-    ),
+plate = meshrectangle(1.0, 1.0, 0.1)
+
+Xs = raviartthomas(plate)
+Xt = raviartthomas(translate(plate, [0.0, 0.0, 3.0]))
+
+tree = TwoNTree(Xs.pos, 0.0; minvalues=40)
+
+op = Maxwell3D.singlelayer(; wavenumber=k)
+A = assemble(op, Xt, Xs)
+tol = 1e-2
+maxrank = 40
+iaca = IACA(
+    MaximumValue(),
+    TreeMimicryPivoting(Xt.pos, Xs.pos, tree),
+    FNormExtrapolator(iFNormEstimator(tol)),
 )
-iaca(Vector(1:100), Vector(1:110))
-colbuffer = zeros(Float64, 40, 40)
-rowbuffer = zeros(Float64, 40, 110)
-npiv, rows, cols = iaca(K, colbuffer, rowbuffer, 40)
-
-@test norm(K[:, cols] * inv(K[rows, cols]) * K[rows, :] - K) / norm(K) < 1e-4
+iaca = iaca([1], [1], maxrank)
+iaca2 = IACA(
+    MaximumValue(), MimicryPivoting(Xt.pos, Xs.pos), FNormExtrapolator(iFNormEstimator(tol))
+)
+iaca2 = iaca2([1], [1], maxrank)
 
 ##
-iaca = AdaptiveCrossApproximation.iACA(pts2, pts1)
-iaca(Vector(1:110), Vector(1:100))
+rowbuffer = zeros(eltype(A), maxrank, maxrank)
+colbuffer = zeros(eltype(A), size(A, 1), maxrank)
+rowidcs = Vector(1:size(A, 1))
+colidcs = collect(H2Trees.LevelIterator(tree, 2))
+rowpivs = zeros(Int, maxrank)
+colpivs = zeros(Int, maxrank)
 
-colbuffer = zeros(Float64, 110, 40)
-rowbuffer = zeros(Float64, 40, 40)
-npivT, rowsT, colsT = iaca(Matrix(transpose(K)), colbuffer, rowbuffer, 40)
+npivots, rows, cols = iaca(
+    A, colbuffer, rowbuffer, rowpivs, colpivs, rowidcs, colidcs, maxrank
+)
+norm(A[:, cols] * inv(A[rows, cols]) * A[rows, :] - A) / norm(A)
+##
+rowbuffer = zeros(eltype(A), maxrank, maxrank)
+colbuffer = zeros(eltype(A), size(A, 1), maxrank)
+rowidcs = Vector(1:size(A, 1))
+colidcs = Vector(1:size(A, 2))
+rowpivs = zeros(Int, maxrank)
+colpivs = zeros(Int, maxrank)
 
-K = transpose(K)
-@test norm(K[:, colsT] * inv(K[rowsT, colsT]) * K[rowsT, :] - K) / norm(K) < 1e-4
-
-@test npiv == npivT
-@test rows == colsT
-@test cols == rowsT
+npivots, rows, cols = iaca2(
+    A, colbuffer, rowbuffer, rowpivs, colpivs, rowidcs, colidcs, maxrank
+)
+norm(A[:, cols] * inv(A[rows, cols]) * A[rows, :] - A) / norm(A)
+##

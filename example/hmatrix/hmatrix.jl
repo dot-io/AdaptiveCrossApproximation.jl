@@ -1,3 +1,5 @@
+using BEAST: operator
+using CUDA
 using H2Trees
 using OhMyThreads
 using BlockSparseMatrices
@@ -82,11 +84,15 @@ function HMatrix(
     compressor=ACA(),
     maxrank=30,
     ntasks=Threads.nthreads(),
+    gpu=false,
+    block_size_threshold=128,
 )
     lk = Threads.SpinLock()
     T = scalartype(operator)
 
-    nearmatrix = AbstractKernel(operator, testspace, trialspace; quadstrat=nearquadstrat)
+    nearmatrix = AbstractKernel(
+        operator, testspace, trialspace; quadstrat=nearquadstrat, gpu=false
+    )
     values, nearvalues = H2Trees.nearinteractions(
         tree; isnear=isnear, extractselfvalues=false
     )
@@ -106,7 +112,18 @@ function HMatrix(
     # storing the far interactions as vector of Dicts, each Dict corresponding to
     # one level, each Dict contains the nodes on the level.
     # Allows easy multithreading in MV
-    farmatrix = AbstractKernel(operator, testspace, trialspace; quadstrat=farquadstrat)
+    #
+    # _make_kernel was a helper that decided at runtime to use CPU or GPU assembly
+    # In the new API, use GPUBlockAssembler from the ACACUDAExt extension
+
+    farmatrix = AbstractKernel(
+        operator, testspace, trialspace; quadstrat=farquadstrat, gpu=gpu
+    )
+    cpu_farmatrix = if gpu
+        AbstractKernel(operator, testspace, trialspace; quadstrat=farquadstrat, gpu=false)
+    else
+        farmatrix
+    end
     iterator = H2Trees.WellSeparatedIterator(; isnear=(tree) -> isnear)(tree)
     farinteractions = Vector{Vector{MatrixBlock{Int,T,LowRankMatrix{T}}}}[]
 
@@ -129,8 +146,13 @@ function HMatrix(
                 rows = zeros(Int, maxrank)
                 cols = zeros(Int, maxrank)
 
+                kernel = if length(tvals) * length(svals) >= block_size_threshold
+                    farmatrix
+                else
+                    cpu_farmatrix
+                end
                 npivots = compressor(
-                    farmatrix,
+                    kernel,
                     view(colbuffer, tvals, 1:maxrank),
                     view(localrowbuffer, 1:maxrank, svals),
                     min(maxrank, min(length(tvals), length(svals)));
@@ -152,7 +174,7 @@ function HMatrix(
             end
             put!(rowbuffer, localrowbuffer)
             lock(lk) do
-                push!(leveldfarblocks, farblocks)
+                return push!(leveldfarblocks, farblocks)
             end
         end
         push!(farinteractions, leveldfarblocks)
