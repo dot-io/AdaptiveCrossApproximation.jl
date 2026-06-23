@@ -37,7 +37,7 @@ function build_problem()
 end
 
 function build_gpu(op, X1, X2, tree)
-    ext = Base.get_extension(AdaptiveCrossApproximation, :ACACUDAExt)
+    ext = Base.get_extension(AdaptiveCrossApproximation, :ACACUDA)
     gpu_comp = ext.GPUCompressor(
         op, X1, X2; tol=TOL, maxrank=MAXRANK, batchsize=BATCHSIZE, kernel=KERNEL
     )

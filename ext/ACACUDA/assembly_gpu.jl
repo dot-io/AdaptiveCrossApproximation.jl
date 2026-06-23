@@ -1,18 +1,18 @@
-const _BEASTCUDAExt = Ref{Any}(nothing)
+const _BEASTCUDA = Ref{Any}(nothing)
 
 function _beast_cuda_ext()
-    if _BEASTCUDAExt[] === nothing
-        ext = Base.get_extension(BEAST, :BEASTCUDAExt)
+    if _BEASTCUDA[] === nothing
+        ext = Base.get_extension(BEAST, :BEASTCUDA)
         if ext === nothing
             error(
-                "BEASTCUDAExt not found. Ensure BEAST.jl is loaded with CUDA support. " *
+                "BEASTCUDA not found. Ensure BEAST.jl is loaded with CUDA support. " *
                 "The GPU assembly path requires BEAST's CUDA extension for " *
                 "`assembleblock_primer_gpu` and `assembleblock_body_gpu!`.",
             )
         end
-        _BEASTCUDAExt[] = ext
+        _BEASTCUDA[] = ext
     end
-    return _BEASTCUDAExt[]
+    return _BEASTCUDA[]
 end
 
 mutable struct GPUBufferPool
@@ -92,9 +92,9 @@ function GPUBlockAssembler(
         error("CUDA is not functional. Cannot create GPUBlockAssembler.")
     end
 
-    BEASTCUDAExt = _beast_cuda_ext()
+    BEASTCUDA = _beast_cuda_ext()
 
-    ctx = BEASTCUDAExt.assembleblock_primer_gpu(operator, testspace, trialspace; kernel)
+    ctx = BEASTCUDA.assembleblock_primer_gpu(operator, testspace, trialspace; kernel)
 
     K = ctx.ZT  # scalar type for this prob
     return GPUBlockAssembler{K}(
@@ -110,15 +110,15 @@ keeping this in if i still want to benchmark "naive dense assembly"
 function _assemble_block_gpu(
     assembler::GPUBlockAssembler{K}, test_ids::Vector{Int}, trial_ids::Vector{Int}
 ) where {K}
-    BEASTCUDAExt = _beast_cuda_ext()
+    BEASTCUDA = _beast_cuda_ext()
 
     m = length(test_ids)
     n = length(trial_ids)
 
     block = CUDA.zeros(K, m, n)
-    store = BEASTCUDAExt.CuMatrixStore(block)
+    store = BEASTCUDA.CuMatrixStore(block)
 
-    BEASTCUDAExt.assembleblock_body_gpu!(
+    BEASTCUDA.assembleblock_body_gpu!(
         assembler.biop,
         assembler.tfs,
         test_ids,
@@ -147,9 +147,9 @@ function AdaptiveCrossApproximation.nextrc!(
     i::AbstractVector{<:Integer},
     j::AbstractVector{<:Integer},
 ) where {K}
-    BEASTCUDAExt = _beast_cuda_ext()
-    store = BEASTCUDAExt.CuMatrixStore(dest)
-    BEASTCUDAExt.assembleblock_body_gpu!(
+    BEASTCUDA = _beast_cuda_ext()
+    store = BEASTCUDA.CuMatrixStore(dest)
+    BEASTCUDA.assembleblock_body_gpu!(
         A.biop,
         A.tfs,
         collect(Int, i),

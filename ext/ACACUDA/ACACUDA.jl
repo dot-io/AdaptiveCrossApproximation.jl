@@ -1,4 +1,4 @@
-module ACACUDAExt
+module ACACUDA
 
 using AdaptiveCrossApproximation:
     AdaptiveCrossApproximation,
@@ -29,9 +29,9 @@ include("gpu_compressor.jl")
 
 function __init__()
     if CUDA.functional()
-        @info "ACACUDAExt: CUDA available, GPU assembly path enabled"
+        @info "ACACUDA: CUDA available, GPU assembly path enabled"
     else
-        @warn "ACACUDAExt: CUDA not functional, GPU assembly path disabled"
+        @warn "ACACUDA: CUDA not functional, GPU assembly path disabled"
     end
 end
 

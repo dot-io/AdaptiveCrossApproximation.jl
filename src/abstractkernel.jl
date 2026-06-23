@@ -12,7 +12,7 @@ function AbstractKernel(
     gpu=false,
 )
     if gpu
-        ext = Base.get_extension(AdaptiveCrossApproximation, :ACACUDAExt)
+        ext = Base.get_extension(AdaptiveCrossApproximation, :ACACUDA)
         if ext !== nothing
             return ext.GPUBlockAssembler(operator, testspace, trialspace)
         else

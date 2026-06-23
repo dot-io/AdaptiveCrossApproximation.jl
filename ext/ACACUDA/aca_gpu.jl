@@ -6,22 +6,11 @@
 # Keyword arguments
 
   - `svd_compression::Bool` (default `false`): remove rows / columns
-  whose singular values in the SVD is near-zero: this SHOULD improve numerical
-  accuracy but remains to be tested
-
-  - `fnorm_iteration::Bool` (default `false`): controls the F-norm accumulator
-  used by the per-batch convergence check.
-    - `false`: cheap host-side accumulator — ‖UV‖_F² ≈ Σ_batches ‖R_IJ‖_F²
-      (sum of squared SVD singular values from each batch's intersection).
-      No extra kernel launches.
-    - `true`: per-pivot accumulator including cross-terms between previous
-      pivots and the new one (two GEMVs per pivot). More accurate but O(p)
-      device work per pivot.
-    In both cases, convergence is tested after every batch via
-    `sqrt(‖R_IJ‖_F²) ≤ tol · sqrt(normUV²)`.
-
+    whose singular values in the SVD is near-zero: this SHOULD improve numerical
+    accuracy but remains to be tested
+  - `fnorm_iteration::Bool` (default `false`): controls the F-norm accumulation (1-by-1 or batched).
   - `svd_backend::Symbol` (default `:cusolver`)
-  """
+"""
 function aca_gpu!(
     assembler::GPUBlockAssembler{K},
     U::CuMatrix{K},
@@ -122,7 +111,6 @@ function aca_gpu!(
         # findfirst run without scalar-indexing a CuArray.
         local sigma_h::Vector{real(K)}, Usvd_k::CuMatrix{K}, Vsvd_k::CuMatrix{K}
         if svd_backend === :cusolver
-
             G = copy(R_IJ_view)
             U_s, S_s, V_s = CUDA.CUSOLVER._svd!(G, false, svd_algorithm)
             sigma_h = Array(S_s)
@@ -140,60 +128,56 @@ function aca_gpu!(
             break
         end
 
-        # In-batch per-pivot trimming. Accept σ_i while it contributes
-        # meaningfully to the running ‖UV‖_F² estimate; otherwise stop. This
-        # is the batched analogue of the CPU FNormEstimator's per-pivot check
-        # and is what prevents the GPU path from over-compressing small
-        # blocks — without it the first batch always commits all `batchsize`
-        # pivots, even when only 3–5 are needed.
-        k_trunc = 0
-        running = normUV
-        per_pivot_fired = false
-        @inbounds for i in 1:length(sigma_h)
-            if running > zero(real(K)) && abs2(sigma_h[i]) <= tol^2 * running
-                per_pivot_fired = true
-                break
-            end
-            k_trunc += 1
-            running += abs2(sigma_h[i])
-        end
-
-        # Optional stricter cut against the largest singular value of *this*
-        # batch's intersection. Kept for backward compatibility; the per-pivot
-        # trim above already subsumes it on the very first batch.
-        if svd_compression && k_trunc > 0
-            kk = findfirst(s -> s <= tol * sigma_1, view(sigma_h, 1:k_trunc))
-            if kk !== nothing
-                k_trunc = max(kk - 1, 1)
-                per_pivot_fired = true
-            end
-        end
-
-        k_trunc = min(k_trunc, maxrank - npivot)
-        if k_trunc == 0
+        b_full = length(sigma_h)
+        b_full = min(b_full, maxrank - npivot)
+        if b_full == 0
             converged = true
             break
         end
 
-        sqrt_sigma_inv = CuArray(K.([one(real(K)) / sqrt(sigma_h[i]) for i in 1:k_trunc]))
+        sqrt_sigma_inv = CuArray(K.([one(real(K)) / sqrt(sigma_h[i]) for i in 1:b_full]))
 
-        U_target = view(U, 1:m, (npivot + 1):(npivot + k_trunc))
-        CUBLAS.gemm!(
-            'N', 'N', one(K), col_view, view(Vsvd_k, :, 1:k_trunc), zero(K), U_target
-        )
-        U_target .*= reshape(sqrt_sigma_inv, 1, k_trunc)
+        U_full = view(U, 1:m, (npivot + 1):(npivot + b_full))
+        CUBLAS.gemm!('N', 'N', one(K), col_view, view(Vsvd_k, :, 1:b_full), zero(K), U_full)
+        U_full .*= reshape(sqrt_sigma_inv, 1, b_full)
 
-        V_target = view(V, (npivot + 1):(npivot + k_trunc), 1:n)
-        CUBLAS.gemm!(
-            'C', 'N', one(K), view(Usvd_k, :, 1:k_trunc), row_view, zero(K), V_target
-        )
-        V_target .*= reshape(sqrt_sigma_inv, k_trunc, 1)
+        V_full = view(V, (npivot + 1):(npivot + b_full), 1:n)
+        CUBLAS.gemm!('C', 'N', one(K), view(Usvd_k, :, 1:b_full), row_view, zero(K), V_full)
+        V_full .*= reshape(sqrt_sigma_inv, b_full, 1)
 
-        # Per-batch F-norm of the intersection residual: cheap, host-side, free
-        # from the SVD we already ran. ‖R_IJ‖_F² = Σ σ_i².
+        u_norms = Array(vec(sqrt.(sum(abs2, U_full; dims=1))))
+        v_norms = Array(vec(sqrt.(sum(abs2, V_full; dims=2))))
+
+        per_pivot = false
+        if fnorm_iteration
+            # Per-pivot trim: stop inside the batch as soon as the new pivot's
+            # F-norm² contribution is negligible relative to the running ‖UV‖_F².
+            k_trunc = 0
+            running = normUV
+            @inbounds for i in 1:b_full
+                contrib_i = abs2(u_norms[i]) * abs2(v_norms[i]) #works for cpx type
+                k_trunc += 1
+                running += contrib_i
+                if running > zero(real(K)) && contrib_i <= tol^2 * running
+                    per_pivot = true
+                    break
+                end
+            end
+        else
+            k_trunc = b_full
+        end
+
+        if svd_compression && k_trunc > 0
+            kk = findfirst(s -> s <= tol * sigma_1, view(sigma_h, 1:k_trunc))
+            if kk !== nothing
+                k_trunc = max(kk, 1)
+                per_pivot = true
+            end
+        end
+
         batch_contribution = zero(real(K))
         @inbounds for i in 1:k_trunc
-            batch_contribution += abs2(sigma_h[i])
+            batch_contribution += abs2(u_norms[i]) * abs2(v_norms[i])
         end
 
         if fnorm_iteration
@@ -234,7 +218,7 @@ function aca_gpu!(
 
         npivot += k_trunc
 
-        if per_pivot_fired
+        if per_pivot
             converged = true
         elseif normUV > zero(real(K))
             converged = sqrt(batch_contribution) <= tol * sqrt(normUV)
