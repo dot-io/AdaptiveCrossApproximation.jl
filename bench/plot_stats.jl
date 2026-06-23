@@ -232,7 +232,7 @@ function plot_bench(data; output_dir=OUTPUT_DIR, fname="bench.svg")
             end
         end
 
-        col == n_ops && axislegend(ax_sp; position=:lt, title=string(category))
+        col == 1 && axislegend(ax_sp; position=:lt, title=string(category))
     end
 
     out = joinpath(output_dir, fname)
