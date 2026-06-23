@@ -7,7 +7,10 @@ authors = ["JoshuaTetzner <joshua.tetzner@uni-rostock.de>"]
 BEAST = "bb4162c7-ba94-5a20-af32-d8ec4428bdd1"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 BlockSparseMatrices = "1ef78180-cc57-4e70-b6ec-c3e471307147"
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 CompScienceMeshes = "3e66a162-7b8c-5da0-b8f8-124ecd2c3ae1"
+GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
+H2Trees = "9db26ae3-82ff-4374-85e9-9ed87405fd16"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LinearMaps = "7a12625a-238d-50fd-b39a-03d52299707e"
 NVTX = "5da4648a-3479-48b8-97b9-01cb529c0a1f"
@@ -19,7 +22,6 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [weakdeps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-H2Trees = "9db26ae3-82ff-4374-85e9-9ed87405fd16"
 
 [extensions]
 ACABEAST = ["BEAST"]
@@ -30,7 +32,9 @@ ACAH2Trees = ["H2Trees"]
 BEAST = "2.8.0"
 BenchmarkTools = "1.8.0"
 BlockSparseMatrices = "0.3.1"
+CairoMakie = "0.15.11"
 CompScienceMeshes = "0.9.0 - 0.11.0"
+GeometryBasics = "0.5.11"
 H2Trees = "0.1, 0.2, 0.3"
 LinearMaps = "3.11.4"
 NVTX = "1.0.3"

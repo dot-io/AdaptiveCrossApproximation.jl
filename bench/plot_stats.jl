@@ -230,7 +230,7 @@ function plot_bench(data; output_dir=OUTPUT_DIR, fname="bench.png")
             end
         end
 
-        col == n_ops && axislegend(ax_sp; position=:rt, title=string(category))
+        col == n_ops && axislegend(ax_sp; position=:lt, title=string(category))
     end
 
     out = joinpath(output_dir, fname)
